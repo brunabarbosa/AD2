@@ -123,7 +123,7 @@ disciplinas.teste <- data.frame(calc1 = teste.model.input$Cálculo.Diferencial.e
 
 ```
 
-> Metodo Ridge + Cross Validation
+> Metodo RIDGE + Cross Validation
 ```{r ridgeCV, cache=TRUE, message=FALSE, warning=FALSE}
 
 disciplinas.treino <- na.omit(disciplinas.treino)
@@ -153,12 +153,13 @@ sqrt(mean(ridge.pred - disciplinas.teste$cra)^2)
 
 ```
 
-> Metodo Ridge + Cross Validation
+> Metodo LASSO + Cross Validation
 ```{r lassoCV, cache=TRUE, message=FALSE, warning=FALSE}
 
-lasso <- train(cra ~., disciplinas.treino,
+lasso <-  train(cra ~., disciplinas.treino,
                method='lasso',
                preProc=c('scale','center'),
+              
                trControl=fitControl)
 lasso
 predict.enet(lasso$finalModel, type='coefficients', s=lasso$bestTune$fraction, mode='fraction')
@@ -169,16 +170,79 @@ sqrt(mean(lasso.pred - disciplinas.teste$cra)^2)
 
 ```
 
-> Comparação 
-
+### Comparação dos modelos com todas as variaveis
 
 Apos rodar algumas vezes o metodo ridge retornou o RMSE da regressão:
-## [1] 0.02003694 e lambda = 0.1232847
+
+##### [1] 0.02003694 e lambda = 0.1232847
 
 Apos rodar algumas vezes o metodo lasso retornou o RMSE da regressão:
-## [1] 0.05248223
 
-> Melhor modelo sem validacao cruzada
+##### [1] 0.05248223
+
+O metodo ridge recebeu um menor RMSE baseado no modelo treinado com os dados de treino dado no LAb03, com todas as entradas NA's removidas
+e cross valisation.O que eu esperava antes de concluir o LAB era que o modelo Lasso combinado com validação cruzada obtivesse um menor RMSE ou muito
+proximo do valor RMSE do modelo Ridge, porem nao foi o que aconteceu.
+
+### Coeficientes no modelo Ridge
+
+```{r analiseRidge, cache=TRUE, message=FALSE, warning=FALSE}
+
+##Coeficientes de maior importância no metodo ridge
+plot(varImp(ridge, scale = FALSE))
+##Valores dos coeficientes definidos pelo metodo ridge
+predict(ridge$finalModel, type='coef', mode='norm')$coefficients[12,]
+
+```
+
+
+**No modelo Ridge + CV as seguintes variaveis receberam coeficiente zero:** 
+```{r}
+##  lpt
+##0.000000000
+```
+
+**E a variavel de maior impacto no metodo ridge no cra foi p2 com o coeficiente:**
+```{r}
+##  p2
+##0.204965371
+```
+
+### Coeficientes no modelo Lasso
+
+```{r analiseLasso, cache=TRUE, message=FALSE, warning=FALSE}
+
+##Coeficientes de maior importância no metodo lasso
+plot(varImp(lasso, scale = FALSE))
+##Valores dos coeficientes definidos pelo metodo lasso
+predict.enet(lasso$finalModel, type='coefficients', s=lasso$bestTune$fraction, mode='fraction')
+
+```
+
+**No modelo Lasso + CV as seguintes variaveis receberam coeficiente zero:**
+```{r}
+##  lpt
+##0.00000000
+
+##  p1
+##0.00000000
+
+##  lp1
+##0.00000000
+```
+
+**E a variavel de maior impacto no metodo lasso cra foi p2 com o coeficiente:**
+```{r}
+##  p2
+##0.20433515 
+```
+
+O metodo lasso retornou um modelo mais simples. No entanto houve um trade-off,
+ao entregar um modelo mais simples o erro(RMSE) entre os dados da predição e os dados 
+do teste cresceu um pouco.
+
+### Melhor modelo sem validacao cruzada
+
 ```{r melhormodelo, cache=TRUE, message=FALSE, warning=FALSE}
 
 set.seed(825) # for reproducing these results
@@ -205,8 +269,14 @@ sqrt(mean(ridge.pred.semcv - disciplinas.teste$cra)^2)
 
 
 
+
 ```
 
 O metodo ridge sem validacao cruzada tem um erro de: 
 [1] 0.02161155. O erro para o metodo ridge sem validação cruzada é um pouco maior do que com a validação cruzada.
+
+### Conclusao
+
+Nesse Lab, dentre os modelos explorados, o que apresentou o menor RMSE foi o modelo RIDGE com todas as variaveis,
+com cross validation e com os dados dividos em 10-folds.
 
