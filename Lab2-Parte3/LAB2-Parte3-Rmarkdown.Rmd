@@ -1,0 +1,26 @@
+---
+title: "lab2-parte3-Rmarkdown"
+author: "Bruna Barbosa"
+date: "December 19, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+> Pre-processamento dos dados 
+
+Pre processamento dos dados de treino e teste fornecidos no Lab2-Parte3
+
+
+```{r prepare, cache=TRUE, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(ISLR)
+library(caret)
+library(readr)
+library(reshape2)
+```

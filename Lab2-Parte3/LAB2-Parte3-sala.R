@@ -21,7 +21,7 @@ graduados.cra <- graduados.clean %>%
   summarise(cra = sum(cra.contrib)/sum(creditos))
 
 head(graduados.cra)
-
+library(caret)
 library(reshape2)
 
 graduados.model.input <- graduados.clean %>%
@@ -57,7 +57,7 @@ train <- disciplinas[split,]
 test <- disciplinas[-split,]
 
 
-set.seed(825) # for reproducing these results
+set.seed(113) # for reproducing these results
 ridge <- train(cra ~., data = train,
                method='ridge',
                lambda = 4)

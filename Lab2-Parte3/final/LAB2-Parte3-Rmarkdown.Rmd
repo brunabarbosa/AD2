@@ -1,0 +1,212 @@
+---
+title: "lab2-parte3-Rmarkdown"
+author: "Bruna Barbosa"
+date: "December 19, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+> Pre-processamento dos dados 
+
+Pre processamento dos dados de treino e teste fornecidos no Lab2-Parte3
+
+
+```{r prepare, cache=TRUE, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(ISLR)
+library(caret)
+library(readr)
+library(reshape2)
+
+##Pre processamento treino
+treino.base <- read_csv("treino_base.csv", col_types = cols(ALU_NOVAMATRICULA = col_character())) %>%
+  mutate(ALU_NOVAMATRICULA = as.factor(ALU_NOVAMATRICULA))
+
+treino.base <- treino.base %>%
+  arrange(ALU_NOVAMATRICULA)
+
+#remover NAs na media final de cada materia
+treino.base.clean <- treino.base %>%
+  filter(!is.na(MAT_MEDIA_FINAL))
+
+#calcular cra
+treino.base.cra <- treino.base.clean %>%
+  group_by(ALU_NOVAMATRICULA) %>%
+  mutate(cra.contrib = MAT_MEDIA_FINAL*CREDITOS) %>%
+  summarise(cra = sum(cra.contrib)/sum(CREDITOS))
+
+
+#Mantem maior nota em caso de reprovacao e junta as tabelas sem NA's 
+#e a tabela que contem o calculo do cra
+
+treino.model.input <- treino.base.clean %>%
+  group_by(ALU_NOVAMATRICULA,DISCIPLINA)  %>%
+  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
+  ungroup() %>%
+  select(ALU_NOVAMATRICULA,DISCIPLINA,MAT_MEDIA_FINAL) %>% 
+  mutate(DISCIPLINA = as.factor(gsub(" ",".",DISCIPLINA))) %>%
+  dcast(ALU_NOVAMATRICULA ~ DISCIPLINA, mean) %>%
+  merge(treino.base.cra)
+
+
+##Pre processamento dados teste
+
+teste.base <- read_csv("teste_base.csv", col_types = cols(ALU_NOVAMATRICULA = col_character())) %>%
+  mutate(ALU_NOVAMATRICULA = as.factor(ALU_NOVAMATRICULA))
+
+
+teste.base <- teste.base %>%
+  arrange(ALU_NOVAMATRICULA)
+
+#remover NAs na media final de cada materia
+teste.base.clean <- teste.base %>%
+  filter(!is.na(MAT_MEDIA_FINAL))
+
+#calcular cra
+teste.base.cra <- teste.base.clean %>%
+  group_by(ALU_NOVAMATRICULA) %>%
+  mutate(cra.contrib = MAT_MEDIA_FINAL*CREDITOS) %>%
+  summarise(cra = sum(cra.contrib)/sum(CREDITOS))
+
+#Mantem maior nota em caso de reprovacao e junta as tabelas sem NA's 
+#e a tabela que contem o calculo do cra
+teste.model.input <- teste.base.clean %>%
+  group_by(ALU_NOVAMATRICULA,DISCIPLINA)  %>%
+  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
+  ungroup() %>%
+  select(ALU_NOVAMATRICULA,DISCIPLINA,MAT_MEDIA_FINAL) %>% 
+  mutate(DISCIPLINA = as.factor(gsub(" ",".",DISCIPLINA))) %>%
+  dcast(ALU_NOVAMATRICULA ~ DISCIPLINA, mean) %>%
+  merge(teste.base.cra)
+
+```
+
+#### Tabelas treino e teste com as disciplinas: 
+```{r table, cache=TRUE, message=FALSE, warning=FALSE}
+disciplinas.treino <- data.frame(calc1 = treino.model.input$Cálculo.Diferencial.e.Integral.I, 
+                          vetorial = treino.model.input$Álgebra.Vetorial.e.Geometria.Analítica,
+                          lpt = treino.model.input$Leitura.e.Produção.de.Textos,
+                          p1 = treino.model.input$Programação.I,
+                          ic = treino.model.input$Introdução.à.Computação,
+                          lp1 = treino.model.input$Laboratório.de.Programação.I,
+                          
+                          calc2 = treino.model.input$Cálculo.Diferencial.e.Integral.II,
+                          md = treino.model.input$Matemática.Discreta,
+                          p2 = treino.model.input$Programação.II,
+                          classica = treino.model.input$Fundamentos.de.Física.Clássica,
+                          lp2 = treino.model.input$Laboratório.de.Programação.II,
+                          grafos = treino.model.input$Teoria.dos.Grafos,
+                          cra = treino.model.input$cra)
+
+
+
+disciplinas.teste <- data.frame(calc1 = teste.model.input$Cálculo.Diferencial.e.Integral.I, 
+                                 vetorial = teste.model.input$Álgebra.Vetorial.e.Geometria.Analítica,
+                                 lpt = teste.model.input$Leitura.e.Produção.de.Textos,
+                                 p1 = teste.model.input$Programação.I,
+                                 ic = teste.model.input$Introdução.à.Computação,
+                                 lp1 = teste.model.input$Laboratório.de.Programação.I,
+                                 
+                                 calc2 = teste.model.input$Cálculo.Diferencial.e.Integral.II,
+                                 md = teste.model.input$Matemática.Discreta,
+                                 p2 = teste.model.input$Programação.II,
+                                 classica = teste.model.input$Fundamentos.de.Física.Clássica,
+                                 lp2 = teste.model.input$Laboratório.de.Programação.II,
+                                 grafos = teste.model.input$Teoria.dos.Grafos,
+                                cra = teste.model.input$cra)
+
+```
+
+> Metodo Ridge + Cross Validation
+```{r ridgeCV, cache=TRUE, message=FALSE, warning=FALSE}
+
+disciplinas.treino <- na.omit(disciplinas.treino)
+disciplinas.teste <- na.omit(disciplinas.teste)
+
+
+set.seed(825) # for reproducing these results
+
+
+fitControl <- trainControl(method = "cv",
+                           number = 10)
+# Set seq of lambda to test
+lambdaGrid <- expand.grid(lambda = 10^seq(10, -2, length=100))
+
+ridge <- train(cra~., data = disciplinas.treino,
+               method='ridge',
+               trControl = fitControl,
+               tuneGrid = lambdaGrid,
+               preProc=c('scale','center')
+)
+
+ridge
+predict(ridge$finalModel, type='coef', mode='norm')$coefficients[12,]
+ridge.pred <- predict(ridge, disciplinas.teste)
+ridge.pred
+sqrt(mean(ridge.pred - disciplinas.teste$cra)^2)
+
+```
+
+> Metodo Ridge + Cross Validation
+```{r lassoCV, cache=TRUE, message=FALSE, warning=FALSE}
+
+lasso <- train(cra ~., disciplinas.treino,
+               method='lasso',
+               preProc=c('scale','center'),
+               trControl=fitControl)
+lasso
+predict.enet(lasso$finalModel, type='coefficients', s=lasso$bestTune$fraction, mode='fraction')
+lasso.pred <- predict(lasso, disciplinas.teste)
+sqrt(mean(lasso.pred - disciplinas.teste$cra)^2)
+
+
+
+```
+
+> Comparação 
+
+
+Apos rodar algumas vezes o metodo ridge retornou o RMSE da regressão:
+## [1] 0.02003694 e lambda = 0.1232847
+
+Apos rodar algumas vezes o metodo lasso retornou o RMSE da regressão:
+## [1] 0.05248223
+
+> Melhor modelo sem validacao cruzada
+```{r melhormodelo, cache=TRUE, message=FALSE, warning=FALSE}
+
+set.seed(825) # for reproducing these results
+ridgesemcv <- train(cra ~ calc1 +
+                vetorial +
+                p1 +
+                ic +
+                lp1 +
+                calc2 +
+                md +
+                p2 +
+                classica +
+                grafos
+               , data = disciplinas.treino,
+               method='ridge',
+               lambda = 0.1232847,
+               preProcess=c('scale', 'center'))
+
+ridgesemcv
+ridge.pred.semcv <- predict(ridgesemcv, disciplinas.teste)
+
+sqrt(mean(ridge.pred.semcv - disciplinas.teste$cra)^2)
+
+
+
+
+```
+
+O metodo ridge sem validacao cruzada tem um erro de: 
+[1] 0.02161155. O erro para o metodo ridge sem validação cruzada é um pouco maior do que com a validação cruzada.
+

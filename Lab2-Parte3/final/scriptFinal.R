@@ -1,0 +1,132 @@
+
+library(readr)
+library(dplyr)
+library(ISLR)
+library(caret)
+library(readr)
+library(reshape2)
+
+
+##Pre processamento treino
+treino.base <- read_csv("treino_base.csv", col_types = cols(ALU_NOVAMATRICULA = col_character())) %>%
+  mutate(ALU_NOVAMATRICULA = as.factor(ALU_NOVAMATRICULA))
+
+treino.base <- treino.base %>%
+  arrange(ALU_NOVAMATRICULA)
+
+#remover NAs na media final de cada materia
+treino.base.clean <- treino.base %>%
+  filter(!is.na(MAT_MEDIA_FINAL))
+
+#calcular cra
+treino.base.cra <- treino.base.clean %>%
+  group_by(ALU_NOVAMATRICULA) %>%
+  mutate(cra.contrib = MAT_MEDIA_FINAL*CREDITOS) %>%
+  summarise(cra = sum(cra.contrib)/sum(CREDITOS))
+
+
+#Mantem maior nota em caso de reprovacao e junta as tabelas sem NA's 
+#e a tabela que contem o calculo do cra
+
+treino.model.input <- treino.base.clean %>%
+  group_by(ALU_NOVAMATRICULA,DISCIPLINA)  %>%
+  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
+  ungroup() %>%
+  select(ALU_NOVAMATRICULA,DISCIPLINA,MAT_MEDIA_FINAL) %>% 
+  mutate(DISCIPLINA = as.factor(gsub(" ",".",DISCIPLINA))) %>%
+  dcast(ALU_NOVAMATRICULA ~ DISCIPLINA, mean) %>%
+  merge(treino.base.cra)
+
+
+##Pre processamento dados teste
+
+teste.base <- read_csv("teste_base.csv", col_types = cols(ALU_NOVAMATRICULA = col_character())) %>%
+  mutate(ALU_NOVAMATRICULA = as.factor(ALU_NOVAMATRICULA))
+
+
+teste.base <- teste.base %>%
+  arrange(ALU_NOVAMATRICULA)
+
+#remover NAs na media final de cada materia
+teste.base.clean <- teste.base %>%
+  filter(!is.na(MAT_MEDIA_FINAL))
+
+#calcular cra
+teste.base.cra <- teste.base.clean %>%
+  group_by(ALU_NOVAMATRICULA) %>%
+  mutate(cra.contrib = MAT_MEDIA_FINAL*CREDITOS) %>%
+  summarise(cra = sum(cra.contrib)/sum(CREDITOS))
+
+#Mantem maior nota em caso de reprovacao e junta as tabelas sem NA's 
+#e a tabela que contem o calculo do cra
+teste.model.input <- teste.base.clean %>%
+  group_by(ALU_NOVAMATRICULA,DISCIPLINA)  %>%
+  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
+  ungroup() %>%
+  select(ALU_NOVAMATRICULA,DISCIPLINA,MAT_MEDIA_FINAL) %>% 
+  mutate(DISCIPLINA = as.factor(gsub(" ",".",DISCIPLINA))) %>%
+  dcast(ALU_NOVAMATRICULA ~ DISCIPLINA, mean) %>%
+  merge(teste.base.cra)
+
+disciplinas.treino <- data.frame(calc1 = treino.model.input$Cálculo.Diferencial.e.Integral.I, 
+                          vetorial = treino.model.input$Álgebra.Vetorial.e.Geometria.Analítica,
+                          lpt = treino.model.input$Leitura.e.Produção.de.Textos,
+                          p1 = treino.model.input$Programação.I,
+                          ic = treino.model.input$Introdução.à.Computação,
+                          lp1 = treino.model.input$Laboratório.de.Programação.I,
+                          
+                          calc2 = treino.model.input$Cálculo.Diferencial.e.Integral.II,
+                          md = treino.model.input$Matemática.Discreta,
+                          p2 = treino.model.input$Programação.II,
+                          classica = treino.model.input$Fundamentos.de.Física.Clássica,
+                          lp2 = treino.model.input$Laboratório.de.Programação.II,
+                          grafos = treino.model.input$Teoria.dos.Grafos,
+                          cra = treino.model.input$cra)
+
+
+
+disciplinas.teste <- data.frame(calc1 = teste.model.input$Cálculo.Diferencial.e.Integral.I, 
+                                 vetorial = teste.model.input$Álgebra.Vetorial.e.Geometria.Analítica,
+                                 lpt = teste.model.input$Leitura.e.Produção.de.Textos,
+                                 p1 = teste.model.input$Programação.I,
+                                 ic = teste.model.input$Introdução.à.Computação,
+                                 lp1 = teste.model.input$Laboratório.de.Programação.I,
+                                 
+                                 calc2 = teste.model.input$Cálculo.Diferencial.e.Integral.II,
+                                 md = teste.model.input$Matemática.Discreta,
+                                 p2 = teste.model.input$Programação.II,
+                                 classica = teste.model.input$Fundamentos.de.Física.Clássica,
+                                 lp2 = teste.model.input$Laboratório.de.Programação.II,
+                                 grafos = teste.model.input$Teoria.dos.Grafos,
+                                cra = teste.model.input$cra)
+
+
+
+disciplinas.treino <- na.omit(disciplinas.treino)
+disciplinas.teste <- na.omit(disciplinas.teste)
+
+
+set.seed(113) # for reproducing these results
+
+
+fitControl <- trainControl(method = "cv",
+                           number = 10)
+# Set seq of lambda to test
+lambdaGrid <- expand.grid(lambda = 10^seq(10, -2, length=100))
+
+ridge <- train(cra~., data = disciplinas.treino,
+               method='ridge',
+               trControl = fitControl,
+               tuneGrid = lambdaGrid
+)
+
+ridge
+predict(ridge$finalModel, type='coef', mode='norm')$coefficients[12,]
+ridge.pred <- predict(ridge, disciplinas.teste)
+ridge.pred
+sqrt(mean(ridge.pred - disciplinas.teste$cra)^2)
+
+
+
+
+

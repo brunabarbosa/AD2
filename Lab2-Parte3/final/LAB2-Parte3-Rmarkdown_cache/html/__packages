@@ -1,0 +1,10 @@
+base
+readr
+dplyr
+ISLR
+lattice
+ggplot2
+caret
+reshape2
+lars
+elasticnet
