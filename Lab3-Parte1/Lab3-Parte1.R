@@ -45,3 +45,5 @@ barplot(counts, main="Dados de treino",
         legend = rownames(counts), beside=TRUE)
 
 
+prop.table(table(treino_classificacao$EVADIU))
+
