@@ -24,6 +24,9 @@ packageVersion('plotly')
 evadiram <- treino_classificacao[treino_classificacao$EVADIU == TRUE, ]
 naoEvadiram <- treino_classificacao[treino_classificacao$EVADIU == FALSE, ]
 
+evadiram2011 <- evadiram[evadiram$MAT_TUR_ANO == 2011, ]
+
+
 #Alunos que evadiram por ano -- ano que mais houve evasao de alunos: 2011
 hist(evadiram$MAT_TUR_ANO)
 

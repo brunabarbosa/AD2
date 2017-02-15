@@ -1,0 +1,118 @@
+---
+title: "lab3-parte1-Rmarkdown"
+author: "Bruna Barbosa"
+date: "February 15, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## LAB03
+
+**Os dados capturam o histórico de alunos do primeiro período (feras) de 2000 a 2015. Os campos são os seguintes:**  
+
+
+MAT_ALU_MATRICULA: Matrrícula aluno (anonimizado)  
+MAT_TUR_DIS_DISCIPLINA: Código Disciplina  
+disciplina: Nome Disciplina  
+MAT_TUR_ANO: Ano da matrícula  
+MAT_MEDIA_FINAL: Média obtida na disciplina  
+EVADIU: Variável-alvo que indica se o aluno evadiu ou não ao término do período.  
+
+> Sobre a Parte 1
+
+Nessa primeira etapa o objetivo é entender os dados e pensar em atributos que podem ajudar na classificação. Lembre-se que grande parte do sucesso de uma tarefa de predição está na escolha de bons atributos.
+
+> Gere uma visualização que mostre em que ano houve mais evasões;
+
+```{r prepare, cache=TRUE, message=FALSE, warning=FALSE}
+#imports
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+treino_classificacao <- read_csv("treino_classificacao.csv")
+
+```
+
+```{r maisevasoes}
+evadiram <- treino_classificacao[treino_classificacao$EVADIU == TRUE, ]
+naoEvadiram <- treino_classificacao[treino_classificacao$EVADIU == FALSE, ]
+
+#Alunos que evadiram por ano -- ano que mais houve evasao de alunos: 2011
+hist(evadiram$MAT_TUR_ANO)
+
+```
+
+O ano em que mais alunos evadiram foi o ano 2011.  
+Uma possivel explicação é que no ano de 2011 a UFCG
+adatou o enem como metodo de entrada para novos aluno.
+Acredito que esse novo metodo de entrada nao é tao rigoroso
+quanto o metodo antigo.
+
+> Gere uma visualização da distribuição das classes (número de instâncias de cada classe nos dados);
+
+```{r graficodebarras}
+# Simple Bar Plot
+counts <- table(treino_classificacao$EVADIU)
+barplot(counts, main="Dados de treino",
+        xlab="Evasão") 
+
+
+#Confirma o que o histograma mostrou, mais pessoas evadiram em 2011
+counts <- table(treino_classificacao$EVADIU, treino_classificacao$MAT_TUR_ANO)
+barplot(counts, main="Dados de treino",
+        xlab="Numero de alunos que evadiram por ano", col=c("darkblue","red"),
+        legend = rownames(counts), beside=TRUE)
+```
+
+
+O segundo grafico de barras reforça que 2011 foi o ano que mais alunos evadiram.
+
+> Há desbalanceamento das classes (isto é, uma classe tem muito mais instâncias que outra)? Em que proporção? Quais efeitos colaterais o desbalancemanento de classes pode causar no classificador?
+
+```{r prop}
+prop.table(table(treino_classificacao$EVADIU))
+
+```
+
+Há desbalaceamento entre as classes, a classe dos alunos que nao evadiram tem aproximadamente 96%
+das instâncias. 
+
+O desbalanceamento entre classes pode causar prejuizo na 
+acuracia do algoritmo. O classificador tende a ficar enviesado para a classe majoritaria.   
+O algoritmo assume que os dados sao balanceados entre as classes e atribuem o mesmo peso para predições erradas. No nosso caso, prever que o aluno nao vai evadir e errar essa predição tem um peso maior, pois nao foi possivel tentar convencer esse aluno a mudar sua decisão.
+
+> Crie pelo menos um atributo novo, que não seja a média da disciplina, que você acha que pode ajudar na classificação. 
+
+##### Descreva-o e diga por que você acha que pode ser uma boa ideia usá-lo;
+
+Um novo atributo que vou considerar nesse LAB é se o aluno esta cursando uma disciplina pela terceira vez.
+Alunos que estao cursando uma disciplina pela terceira vez tem grande dificuldade em concluir a disciplina e 
+podem desisitir da graduação.
+
+
+##### Compare visualmente a distribuição desse atributo em cada classe (e.g. usando boxplots): elas parecem ser diferentes? O que ajuda mais o classificador, atributos que tem distribuições de valores diferentes entre as classes ou distribuições parecidas? Por que?
+
+Atributos que tem distribuições diferentes entre as classes sao mais efetivos para ajudar o classificador a fazer uma decisão.
+A falta ou presença daquele atributo na instancia vai influenciar na probabilidade de como a instancia vai ser classificada.
+
+Exemplo de um banco:
+Pagadores que ganham mais de 50 000/mes provavelmente são bons pagadores.  
+No caso, o atributo é se o cliente tem um salario > 50 000 (altoSalario).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
