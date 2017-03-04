@@ -1,0 +1,49 @@
+---
+title: "Lab3-parte2"
+author: "Bruna"
+date: "March 1, 2017"
+output: html_document
+---
+
+```{r setup, cache=TRUE, message=FALSE, warning=FALSE}
+library(ISLR)
+library(readr)
+library(caret)
+library(dplyr)
+
+treino_classificacao_v2 <- read_csv("treino_classificacao_v2.csv")
+
+
+```
+
+## 1.Separe os dados em treino e teste;
+
+
+```{r particao}
+split <- createDataPartition(y=treino_classificacao_v2$EVADIU, p = 0.9, list = FALSE)
+train <- treino_classificacao_v2[split,]
+test <- treino_classificacao_v2[-split,]
+
+
+```
+
+## 2.Use como atributos as médias das disciplinas mais o atributo que você criou na parte 1 (fique a vontade para criar mais atributos);
+
+```{r atributonovo}
+
+novoatributo <- treino_classificacao_v2 %>%
+  group_by(MAT_ALU_MATRICULA)
+
+novoatributo[novoatributo$MAT_TUR_ANO <= 2011, "ENEM"] <- 0
+novoatributo[novoatributo$MAT_TUR_ANO > 2011, "ENEM"] <- 1
+novoatributo$CREDITOS <- 4
+
+## treino e teste com novo atributo
+split <- createDataPartition(y=novoatributo$EVADIU, p = 0.9, list = FALSE)
+train <- novoatributo[split,]
+test <- novoatributo[-split,]
+
+
+
+```
+

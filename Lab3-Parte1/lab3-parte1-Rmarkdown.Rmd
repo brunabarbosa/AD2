@@ -93,6 +93,45 @@ Um novo atributo que vou considerar nesse LAB é se o aluno esta cursando uma di
 Alunos que estao cursando uma disciplina pela terceira vez tem grande dificuldade em concluir a disciplina e 
 podem desisitir da graduação.
 
+```{r attribute}
+
+
+library(tidyr)
+library(dplyr)
+library(plyr)
+
+##fez enem ou nao fez enem
+
+
+novoatributo <- treino_classificacao %>%
+  group_by(MAT_ALU_MATRICULA)
+
+
+novoatributo[novoatributo$MAT_TUR_ANO <= 2011, "enem"] <- 0
+novoatributo[novoatributo$MAT_TUR_ANO > 2011, "enem"] <- 1
+
+View(novoatributo)
+
+
+evadiram <- novoatributo[novoatributo$EVADIU == TRUE, ]
+naoEvadiram <- novoatributo[novoatributo$EVADIU == FALSE, ]
+
+##quantos que fizeram enem evadiram
+##quantos que nao fizeram enem evadiram
+
+fizeramEnem <- novoatributo[novoatributo$enem == 1, ]
+naoFizeramEnem <- novoatributo[novoatributo$enem == 0, ]
+
+boxplot(MAT_TUR_ANO~EVADIU,data=fizeramEnem)
+boxplot(MAT_TUR_ANO~EVADIU,data=naoFizeramEnem)
+
+prop.table(table(fizeramEnem$EVADIU))
+prop.table(table(naoFizeramEnem$EVADIU))
+
+
+#boxplot(MAT_TUR_ANO~enem,data=naoEvadiram)
+```
+
 
 ##### Compare visualmente a distribuição desse atributo em cada classe (e.g. usando boxplots): elas parecem ser diferentes? O que ajuda mais o classificador, atributos que tem distribuições de valores diferentes entre as classes ou distribuições parecidas? Por que?
 
