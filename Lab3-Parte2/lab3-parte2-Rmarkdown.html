@@ -123,16 +123,170 @@ $(document).ready(function () {
 </div>
 
 
+<div id="separe-os-dados-em-treino-e-teste" class="section level3">
+<h3>1.Separe os dados em treino e teste;</h3>
 <pre class="r"><code>library(ISLR)
 library(readr)
 library(caret)
+library(dplyr)
+library(reshape2)
+library(pROC)
+library(ROSE)
+library(caret)
 
-treino_classificacao_v2 &lt;- read_csv(&quot;treino_classificacao_v2.csv&quot;)</code></pre>
-<div id="separe-os-dados-em-treino-e-teste" class="section level2">
-<h2>1.Separe os dados em treino e teste;</h2>
-<pre class="r"><code>split &lt;- createDataPartition(y=treino_classificacao_v2$EVADIU, p = 0.9, list = FALSE)
-train &lt;- treino_classificacao_v2[split,]
-test &lt;- treino_classificacao_v2[-split,]</code></pre>
+set.seed(9560)
+#setwd(&quot;~/AD2/Lab3-Parte2&quot;)
+treino_classificacao_v2 &lt;- read_csv(&quot;treino_classificacao_v2.csv&quot;)
+
+##Reshape nos dados
+classificacao.clean &lt;- treino_classificacao_v2 %&gt;%
+  filter(!is.na(MAT_MEDIA_FINAL))
+
+classificacao.clean$CREDITOS &lt;- 4
+
+##novo atributo
+classificacao.clean[classificacao.clean$MAT_TUR_ANO &lt; 2011, &quot;ENEM&quot;] &lt;- FALSE
+classificacao.clean[classificacao.clean$MAT_TUR_ANO &gt;= 2011, &quot;ENEM&quot;] &lt;- TRUE
+
+classificacao.cra &lt;- classificacao.clean %&gt;%
+  group_by(MAT_ALU_MATRICULA, EVADIU, ENEM) %&gt;%
+  mutate(cra.contrib = MAT_MEDIA_FINAL*CREDITOS) %&gt;%
+  summarise(cra = sum(cra.contrib)/sum(CREDITOS))
+
+
+classificacao.model.input &lt;- classificacao.clean %&gt;%
+  group_by(MAT_ALU_MATRICULA,disciplina)  %&gt;%
+  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %&gt;%
+  ungroup() %&gt;%
+  select(MAT_ALU_MATRICULA,disciplina,MAT_MEDIA_FINAL) %&gt;% 
+  mutate(disciplina = as.factor(gsub(&quot; &quot;,&quot;.&quot;,disciplina))) %&gt;%
+  dcast(MAT_ALU_MATRICULA ~ disciplina, mean) %&gt;%
+  merge(classificacao.cra)
+
+##Split dos dados
+
+split &lt;- createDataPartition(y=classificacao.model.input$EVADIU, p = 0.90, list = FALSE)
+train &lt;- classificacao.model.input[split,]
+test &lt;- classificacao.model.input[-split,]
+
+##to factor
+train$EVADIU &lt;- as.factor(train$EVADIU)
+train$MAT_ALU_MATRICULA &lt;- as.factor(train$MAT_ALU_MATRICULA)
+train$ENEM &lt;- as.logical(train$ENEM)
+is.factor(train$EVADIU)</code></pre>
+<pre><code>## [1] TRUE</code></pre>
+<pre class="r"><code>is.factor(train$MAT_ALU_MATRICULA) </code></pre>
+<pre><code>## [1] TRUE</code></pre>
+<pre class="r"><code>##remove NA's
+train.clean &lt;- train %&gt;%
+  filter(!is.na(Álgebra.Vetorial.e.Geometria.Analítica)) %&gt;%
+  filter(!is.na(Cálculo.Diferencial.e.Integral.I)) %&gt;%
+  filter(!is.na(Introdução.à.Computação)) %&gt;%
+  filter(!is.na(Laboratório.de.Programação.I)) %&gt;%
+  filter(!is.na(Programação.I)) %&gt;%
+  filter(!is.na(Leitura.e.Produção.de.Textos)) 
+
+##remove NA's
+test.clean &lt;- test %&gt;%
+  filter(!is.na(Álgebra.Vetorial.e.Geometria.Analítica)) %&gt;%
+  filter(!is.na(Cálculo.Diferencial.e.Integral.I)) %&gt;%
+  filter(!is.na(Introdução.à.Computação)) %&gt;%
+  filter(!is.na(Laboratório.de.Programação.I)) %&gt;%
+  filter(!is.na(Programação.I)) %&gt;%
+  filter(!is.na(Leitura.e.Produção.de.Textos))</code></pre>
+</div>
+<div id="use-como-atributos-as-medias-das-disciplinas-mais-o-atributo-que-voce-criou-na-parte-1-fique-a-vontade-para-criar-mais-atributos" class="section level3">
+<h3>2.Use como atributos as médias das disciplinas mais o atributo que você criou na parte 1 (fique a vontade para criar mais atributos);</h3>
+<p>O atributo que eu escolhi avaliar foi se o aluno teve como metodo de entrada o enem.</p>
+</div>
+<div id="treine-modelos-de-regressao-logistica" class="section level3">
+<h3>3.Treine modelos de regressão logística;</h3>
+<pre class="r"><code>##Modelo com todas as disciplinas
+model &lt;- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+             + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Leitura.e.Produção.de.Textos
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica 
+             ,family=binomial, data=train.clean)
+
+summary(model)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = EVADIU ~ Cálculo.Diferencial.e.Integral.I + Introdução.à.Computação + 
+##     Laboratório.de.Programação.I + Leitura.e.Produção.de.Textos + 
+##     Programação.I + Álgebra.Vetorial.e.Geometria.Analítica, family = binomial, 
+##     data = train.clean)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -1.4452  -0.1740  -0.1305  -0.1010   3.2559  
+## 
+## Coefficients:
+##                                        Estimate Std. Error z value
+## (Intercept)                              0.5837     0.4066   1.436
+## Cálculo.Diferencial.e.Integral.I        -0.2302     0.1374  -1.675
+## Introdução.à.Computação                 -0.4892     0.1661  -2.946
+## Laboratório.de.Programação.I            -0.2391     0.2675  -0.894
+## Leitura.e.Produção.de.Textos            -0.1828     0.1072  -1.705
+## Programação.I                            0.2671     0.2960   0.902
+## Álgebra.Vetorial.e.Geometria.Analítica   0.1909     0.1377   1.386
+##                                        Pr(&gt;|z|)   
+## (Intercept)                             0.15111   
+## Cálculo.Diferencial.e.Integral.I        0.09390 . 
+## Introdução.à.Computação                 0.00322 **
+## Laboratório.de.Programação.I            0.37138   
+## Leitura.e.Produção.de.Textos            0.08814 . 
+## Programação.I                           0.36695   
+## Álgebra.Vetorial.e.Geometria.Analítica  0.16565   
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 270.80  on 914  degrees of freedom
+## Residual deviance: 164.59  on 908  degrees of freedom
+## AIC: 178.59
+## 
+## Number of Fisher Scoring iterations: 7</code></pre>
+<pre class="r"><code>##Modelo não balanceado
+table(train$EVADIU)</code></pre>
+<pre><code>## 
+## FALSE  TRUE 
+##  1091    81</code></pre>
+<pre class="r"><code>##Modelo com todas as disciplinas + ENEM
+model.attr &lt;- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                  + Introdução.à.Computação
+                  + Laboratório.de.Programação.I
+                  + Leitura.e.Produção.de.Textos
+                  + Programação.I
+                  + Álgebra.Vetorial.e.Geometria.Analítica + ENEM
+                  ,family=binomial, data=train.clean)
+
+##Modelo não balanceado
+table(train$EVADIU)</code></pre>
+<pre><code>## 
+## FALSE  TRUE 
+##  1091    81</code></pre>
+<blockquote>
+<p>Modelos de regressão logistica balanceados</p>
+</blockquote>
+<p>No proximo modelo foram criadas mais instancias da classe dos alunos que avadiram</p>
+<pre class="r"><code>#oversampling
+up_train &lt;- upSample(x = train.clean[, -ncol(train.clean)],
+                     y = train.clean$EVADIU)                         
+table(up_train$EVADIU)</code></pre>
+<pre><code>## 
+## FALSE  TRUE 
+##   884   884</code></pre>
+<pre class="r"><code>##modelo com balanceamento
+model.up &lt;- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                + Introdução.à.Computação
+                + Laboratório.de.Programação.I
+                + Leitura.e.Produção.de.Textos
+                + Programação.I
+                + Álgebra.Vetorial.e.Geometria.Analítica
+                ,family=binomial, data=up_train)</code></pre>
 </div>
 
 

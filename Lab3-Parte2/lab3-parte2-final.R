@@ -5,6 +5,7 @@ library(dplyr)
 library(reshape2)
 library(pROC)
 library(ROSE)
+library(caret)
 
 setwd("~/AD2/Lab3-Parte2")
 treino_classificacao_v2 <- read_csv("treino_classificacao_v2.csv")
@@ -102,7 +103,16 @@ model <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
              + Programação.I
              + Álgebra.Vetorial.e.Geometria.Analítica 
              ,family=binomial, data=train.clean)
+
 summary(model)
+
+model.new <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                 + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica
+             ,family=binomial, data=train.clean)
+summary(model.new)
 
 model.attr <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
                   + Introdução.à.Computação
@@ -147,6 +157,7 @@ misClasificError <- mean(fitted.results != test.clean$EVADIU)
 print(paste('Accuracy',1-misClasificError))
 
 auc(test.clean$EVADIU, fitted.results)
+
 
 fitted.results.attr <- predict(model.attr,newdata=test.clean,type='response')
 fitted.results.attr <- ifelse(fitted.results.attr > 0.5,1,0)
@@ -222,4 +233,75 @@ Prediction.fit2 <- predict(fit, test.clean, type = "class")
 accuracy.meas(test.clean$EVADIU,Prediction.fit2)
 roc.curve(test.clean$EVADIU,Prediction.fit2, plotit = F)
 
+#caret
+#k-folds + cross-validation
 
+library(caret)
+
+
+caret_model <- train(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                     + Introdução.à.Computação
+                     + Laboratório.de.Programação.I
+                     + Leitura.e.Produção.de.Textos
+                     + Programação.I
+                     + Álgebra.Vetorial.e.Geometria.Analítica, 
+                     data=train.clean, method="glm", family="binomial")
+
+caret.probs <- predict(caret_model, newdata=test.clean, type="prob")
+caret.probs
+caret.results <- predict(caret_model,newdata=test.clean)
+caret.results
+confusionMatrix(data=caret.results, reference=test.clean$EVADIU)
+
+accuracy <- table(caret.results, test.clean[,"EVADIU"])
+sum(diag(accuracy))/sum(accuracy)
+
+roc.curve(test.clean$EVADIU,caret.results, plotit = F)
+###############
+set.seed(9560)
+fitControl <- trainControl(method = "cv",
+                           number = 10)
+# Set seq of lambda to test
+lambdaGrid <- expand.grid(lambda = 10^seq(10, -2, length=100))
+
+glmfit <- train(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                + Introdução.à.Computação
+                + Laboratório.de.Programação.I
+                + Leitura.e.Produção.de.Textos
+                + Programação.I
+                + Álgebra.Vetorial.e.Geometria.Analítica,
+               data = train.clean,
+               method='glm',
+               trControl = fitControl,
+               preProc=c('scale', 'center'))
+glmfit
+
+coef(glmfit$finalModel)
+glmfit.pred <- predict(glmfit, test.clean)
+roc.curve(test.clean$EVADIU,glmfit.pred, plotit = F)
+
+
+##Lasso and Ridge
+
+set.seed(825)
+fitControl <- trainControl(method = "cv",
+                           number = 10)
+# Set seq of lambda to test
+lambdaGrid <- expand.grid(lambda = 10^seq(10, -2, length=100))
+
+ridge <- train(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+               + Introdução.à.Computação
+               + Laboratório.de.Programação.I
+               + Leitura.e.Produção.de.Textos
+               + Programação.I
+               + Álgebra.Vetorial.e.Geometria.Analítica, 
+               data = train.clean,
+               method='ridge',
+               trControl = fitControl,
+               tuneGrid = lambdaGrid,
+               preProcess=c('center', 'scale')
+)
+
+ridge
+predict(ridge$finalModel, type='coef', mode='norm')$coefficients[ncol(train.clean),]
+ridge.pred <- predict(ridge, test)
