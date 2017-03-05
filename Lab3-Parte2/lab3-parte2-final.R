@@ -3,7 +3,7 @@ library(readr)
 library(caret)
 library(dplyr)
 library(reshape2)
-
+library(pROC)
 
 
 setwd("~/AD2/Lab3-Parte2")
@@ -41,17 +41,12 @@ train <- classificacao.model.input[split,]
 test <- classificacao.model.input[-split,]
 table(train$EVADIU) 
 
-#oversampling
-set.seed(9560)
-up_train <- upSample(x = train[, -ncol(train)],
-                     y = as.factor(train$EVADIU))                         
-table(up_train$EVADIU) 
+##to factor
+train$EVADIU <- as.factor(train$EVADIU)
+train$MAT_ALU_MATRICULA <- as.factor(train$MAT_ALU_MATRICULA)
 
-
-##modelo sem balanceamento
-
-
-
+is.factor(train$EVADIU)
+is.factor(train$MAT_ALU_MATRICULA)
 
 train.clean <- train %>%
   filter(!is.na(Álgebra.Vetorial.e.Geometria.Analítica)) %>%
@@ -68,55 +63,99 @@ test.clean <- test %>%
   filter(!is.na(Laboratório.de.Programação.I)) %>%
   filter(!is.na(Programação.I)) %>%
   filter(!is.na(Leitura.e.Produção.de.Textos))
-  
+
+
+
+#oversampling
+set.seed(9560)
+up_train <- upSample(x = train.clean[, -ncol(train.clean)],
+                     y = train.clean$EVADIU)                         
+table(up_train$EVADIU) 
+
+#undersampling
+set.seed(9560)
+down_train <- downSample(x = train.clean[, -ncol(train.clean)],
+                         y = train.clean$EVADIU)  
+table(down_train$Class)   
+
+#ROSE
+library(ROSE)
+set.seed(9560)
+rose_train <- ROSE(EVADIU ~ . , data  = train.clean)$data                         
+table(rose_train$EVADIU) 
+
 ##regressao logistica##
+##modelo sem balanceamento
 model <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
              + Introdução.à.Computação
              + Laboratório.de.Programação.I
              + Leitura.e.Produção.de.Textos
              + Programação.I
-             + Álgebra.Vetorial.e.Geometria.Analítica
+             + Álgebra.Vetorial.e.Geometria.Analítica 
              ,family=binomial, data=train.clean)
 summary(model)
+  
+##modelo com balanceamento
+model.up <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+             + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Leitura.e.Produção.de.Textos
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica
+             ,family=binomial, data=up_train)
+summary(model.up)
 
-# Analysis of deviance
-anova(model,test="Chisq")
+model.down <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                + Introdução.à.Computação
+                + Laboratório.de.Programação.I
+                + Leitura.e.Produção.de.Textos
+                + Programação.I
+                + Álgebra.Vetorial.e.Geometria.Analítica
+                ,family=binomial, data=down_train)
 
-# MEASURING THE PREDICTIVE ABILITY OF THE MODEL
-
-# If prob > 0.5 then 1, else 0. Threshold can be set for better results
-fitted.results <- predict(model,newdata=test.clean,type='response')
-fitted.results <- ifelse(fitted.results > 0.5,1,0)
-fitted.results
-
-misClasificError <- mean(fitted.results != test.clean$EVADIU)
-print(paste('Accuracy',1-misClasificError))
-
-
-library(pROC)
-
-auc(test.clean$EVADIU, fitted.results)
-
-##plot
-roc.curve(test.clean$EVADIU, fitted.results)
-##regressao logistica##
-
-#########################################################################
-##dados balanceados
-
-install.packages("ROSE")
-library(ROSE)
-
-hacide.rose <- ROSE(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+model.rose <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
                   + Introdução.à.Computação
                   + Laboratório.de.Programação.I
                   + Leitura.e.Produção.de.Textos
                   + Programação.I
                   + Álgebra.Vetorial.e.Geometria.Analítica
-                  , data = train.clean, seed = 123)$data
+                  ,family=binomial, data=rose_train)
 
-table(data.rose$cls)
+# Analysis of deviance
+anova(model,test="Chisq")
 
-is.factor(train.clean$EVADIU)
+fitted.results <- predict(model,newdata=test.clean,type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+fitted.results
+misClasificError <- mean(fitted.results != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results)
 
-data_balanced_over <- ovun.sample(EVADIU ~ ., data = train.clean, method = "over",N = 1960)$data
+#AUC oversampling
+fitted.results.up <- predict(model.up,newdata=test.clean,type='response')
+fitted.results.up <- ifelse(fitted.results.up > 0.5,1,0)
+fitted.results.up
+misClasificError <- mean(fitted.results.up != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results.up)
+
+#AUC undersampling
+fitted.results.under <- predict(model.down,newdata=test.clean,type='response')
+fitted.results.under <- ifelse(fitted.results.under > 0.5,1,0)
+fitted.results.under
+misClasificError <- mean(fitted.results.under != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results.under)
+
+#AUC ROSE
+fitted.results.rose <- predict(model.rose,newdata=test.clean,type='response')
+fitted.results.rose <- ifelse(fitted.results.rose > 0.5,1,0)
+fitted.results.rose
+misClasificError <- mean(fitted.results.rose != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results.rose)
+
+auc(test.clean$EVADIU, fitted.results)
+auc(test.clean$EVADIU, fitted.results.up)
+auc(test.clean$EVADIU, fitted.results.under)
+auc(test.clean$EVADIU, fitted.results.rose)
