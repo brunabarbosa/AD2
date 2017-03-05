@@ -1,6 +1,6 @@
 ---
 title: "Lab3-parte2"
-author: "Bruna"
+author: "Bruna Barbosa"
 date: "March 1, 2017"
 output: html_document
 ---
@@ -96,7 +96,7 @@ table(train$EVADIU)
 ```
 ```{r glmmaisenem}
 ##Modelo com todas as disciplinas + ENEM
-model.attr <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+model.enem <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
                   + Introdução.à.Computação
                   + Laboratório.de.Programação.I
                   + Leitura.e.Produção.de.Textos
@@ -189,7 +189,6 @@ fit <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
              data=train.clean,
              method="class")
 
-##overfiting
 fancyRpartPlot(fit)
 
 ```
@@ -221,12 +220,11 @@ fit.down <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
              data=down_train,
              method="class")
 
-##overfiting
 fancyRpartPlot(fit.down)
 
 ##modelo com balanceamento - ROSE package
 ##Parametros de prunning default
-fit.bal <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+fit.rose <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
              + Introdução.à.Computação
              + Laboratório.de.Programação.I
              + Leitura.e.Produção.de.Textos
@@ -235,14 +233,171 @@ fit.bal <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
              data=rose_train,
              method="class")
 
-##overfiting
-fancyRpartPlot(fit.bal)
+fancyRpartPlot(fit.rose)
+
+
 
 ```
 
 ### 5.Treine modelos de árvore de decisão;
-```{r quinto}
+
+```{r importance}
+
 importancia <- varImp(model, scale = FALSE)
 importancia
+```
 
-```{
+O atributo mais importante para a regressão logistica com todas as disciplinas são
+1. Introdução.à.Computação [2.9459793]
+2. Leitura.e.Produção.de.Textos [1.7052697]
+
+### 6.Reporte acurácia, precision e recall no treino e teste. 
+Como você avalia os resultados? Justifique sua resposta.
+
+
+```{r acuraciatreino}
+#Acuracia treino para a regressao logistica
+# MEASURING THE PREDICTIVE ABILITY OF THE MODEL
+fitted.results <- predict(model,newdata=train.clean,type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+misClasificError <- mean(fitted.results != train.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+accuracy.meas(train.clean$EVADIU, fitted.results)
+```
+
+
+```{r acuraciateste}
+#Acuracia teste para a regressao logistica
+# MEASURING THE PREDICTIVE ABILITY OF THE MODEL
+fitted.results <- predict(model,newdata=test.clean,type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+misClasificError <- mean(fitted.results != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+accuracy.meas(test.clean$EVADIU, fitted.results)
+```
+Por algum problema no codigo, a acuracia da predição dos dados de treino é zero
+e nos dados de teste a acuracia é aproximadamente 0.9.
+Isso pode se dar pois a classe no teste esta desbalanceada e o teste possui poucas instancias onde 
+o aluno nao evadiu.
+
+### 7.  Controle overfitting usando validação-cruzada (ridge e lasso na regressão logística e condições de "early stopping" nas árvores de decisão, por exemplo, profundidade da árvore);
+
+```{r regressaologistica}
+#Acuracia teste para a regressao logistica com validacao-cruzada
+library(caret)
+
+
+fitControl <- trainControl(method = "cv",
+                           number = 10)
+# Set seq of lambda to test
+lambdaGrid <- expand.grid(lambda = 10^seq(10, -2, length=100))
+
+glmfit <- train(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                + Introdução.à.Computação
+                + Laboratório.de.Programação.I
+                + Leitura.e.Produção.de.Textos
+                + Programação.I
+                + Álgebra.Vetorial.e.Geometria.Analítica,
+                data = train.clean,
+                method='glm',
+                trControl = fitControl,
+                preProc=c('scale', 'center'))
+glmfit
+
+coef(glmfit$finalModel)
+glmfit.pred <- predict(glmfit, test.clean)
+
+```
+
+```{r decisiontreeprune}
+#Decision tree com atributos de pruning alterados (cp e minsplit)
+fitprune <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+              + Introdução.à.Computação
+              + Laboratório.de.Programação.I
+              + Leitura.e.Produção.de.Textos
+              + Programação.I
+              + Álgebra.Vetorial.e.Geometria.Analítica,
+              data=train.clean,
+              method="class",
+              control=rpart.control(minsplit=20, cp=0.02))
+
+Prediction.fit2 <- predict(fitprune, test.clean, type = "class")
+accuracy.meas(test.clean$EVADIU,Prediction.fit2)
+
+```
+
+### 8. Reporte acurácia, precision e recall da validação-cruzada e teste (para os melhores modelos);
+A metrica que escolhi para obter o melhor modelo é a curva ROC (Receiver Operating Characteristics) para medir a 
+acuracia das predicoes nos dados de teste. A curva ROC é formada pelo plot da TP rate (Sensitivity) e FP rate (Specificity).
+
+```{r bestmodel}
+fitted.results <- predict(model,newdata=test.clean,type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+
+fitted.results.attr <- predict(model.enem,newdata=test.clean,type='response')
+fitted.results.attr <- ifelse(fitted.results.attr > 0.5,1,0)
+
+#oversampling
+fitted.results.up <- predict(model.up,newdata=test.clean,type='response')
+fitted.results.up <- ifelse(fitted.results.up > 0.5,1,0)
+
+#undersampling
+fitted.results.under <- predict(model.down,newdata=test.clean,type='response')
+fitted.results.under <- ifelse(fitted.results.under > 0.5,1,0)
+
+#ROSE
+fitted.results.rose <- predict(model.rose,newdata=test.clean,type='response')
+fitted.results.rose <- ifelse(fitted.results.rose > 0.5,1,0)
+
+##decision tree nao balanceada
+fitted.results.dt <- predict(fit, newdata=test.clean, type = "class")
+
+##decision tree balanceada
+#oversampling
+fitted.results.dt.up <- predict(fit.up,newdata=test.clean, type = "class")
+
+#undersampling
+fitted.results.dt.under <- predict(fit.down,newdata=test.clean, type = "class")
+
+#ROSE
+fitted.results.dt.rose <- predict(fit.rose,newdata=test.clean, type = "class")
+
+#AUC ROSE
+##regressao logistica
+roc.curve(test.clean$EVADIU, fitted.results, plotit = F)
+roc.curve(test.clean$EVADIU, fitted.results.attr, plotit = F)
+roc.curve(test.clean$EVADIU, fitted.results.up, plotit = F)
+roc.curve(test.clean$EVADIU, fitted.results.under, plotit = F)
+roc.curve(test.clean$EVADIU, fitted.results.rose, plotit = F)
+
+#arvore de decisao
+roc.curve(test.clean$EVADIU, fitted.results.dt, plotit = F)
+roc.curve(test.clean$EVADIU, fitted.results.dt.up, plotit = F)
+roc.curve(test.clean$EVADIU, fitted.results.dt.under, plotit = F)
+roc.curve(test.clean$EVADIU, fitted.results.dt.rose, plotit = F)
+
+roc.curve(test.clean$EVADIU,glmfit.pred, plotit = F)
+roc.curve(test.clean$EVADIU,Prediction.fit2, plotit = F)
+```
+### 9. Aplique o melhor modelo a você mesmo(a) usando seu histórico e reporte a predição e resultado.
+
+O melhor modelo de acordo com a metrica escolhida (curva ROC) é a regressao logistica balanceada
+com o metodo de undersampling.
+
+```{r meuhist}
+
+newdata = data.frame(Cálculo.Diferencial.e.Integral.I = 5.7,
+                       Introdução.à.Computação = 8.2,
+                       Laboratório.de.Programação.I = 8.7,
+                       Leitura.e.Produção.de.Textos = 7.8,
+                       Programação.I = 8.7,
+                       Álgebra.Vetorial.e.Geometria.Analítica = 5.9)
+
+#Com todas as variaveis                     
+result <- predict(model.down, newdata)
+result <- ifelse(result > 0.5,'TRUE','FALSE')
+result
+```
+
+A predição do melhor modelo mostrou que de acordo com as notas do meu primeiro periodo eu nao irei evadir o curso.
+
