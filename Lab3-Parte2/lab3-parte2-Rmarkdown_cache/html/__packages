@@ -1,0 +1,14 @@
+base
+methods
+datasets
+utils
+grDevices
+graphics
+stats
+ISLR
+readr
+lattice
+ggplot2
+caret
+dplyr
+reshape2

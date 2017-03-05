@@ -12,8 +12,6 @@ library(readr)
 library(caret)
 library(dplyr)
 library(reshape2)
-library(pROC)
-library(ROSE)
 library(caret)
 
 set.seed(9560)
@@ -46,7 +44,6 @@ classificacao.model.input <- classificacao.clean %>%
   merge(classificacao.cra)
 
 ##Split dos dados
-
 split <- createDataPartition(y=classificacao.model.input$EVADIU, p = 0.90, list = FALSE)
 train <- classificacao.model.input[split,]
 test <- classificacao.model.input[-split,]
@@ -55,8 +52,6 @@ test <- classificacao.model.input[-split,]
 train$EVADIU <- as.factor(train$EVADIU)
 train$MAT_ALU_MATRICULA <- as.factor(train$MAT_ALU_MATRICULA)
 train$ENEM <- as.logical(train$ENEM)
-is.factor(train$EVADIU)
-is.factor(train$MAT_ALU_MATRICULA) 
 
 ##remove NA's
 train.clean <- train %>%
@@ -114,9 +109,11 @@ table(train$EVADIU)
 ```
 > Modelos de regressão logistica balanceados
 
-No proximo modelo foram criadas mais instancias da classe dos alunos que avadiram
+No proximo modelo foram criadas mais instancias da classe dos alunos que evadiram
 ```{r glmup}
 
+library(ROSE)
+library(pROC)
 
 #oversampling
 up_train <- upSample(x = train.clean[, -ncol(train.clean)],
@@ -133,4 +130,119 @@ model.up <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
                 ,family=binomial, data=up_train)
 ```
 
+No proximo modelo foram retiradas instancias da classe dos alunos que não evadiram
+```{r glmdown}
 
+set.seed(9560)
+down_train <- downSample(x = train.clean[, -ncol(train.clean)],
+                         y = train.clean$EVADIU)  
+table(down_train$Class)   
+
+##modelo com balanceamento
+model.down <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                  + Introdução.à.Computação
+                  + Laboratório.de.Programação.I
+                  + Leitura.e.Produção.de.Textos
+                  + Programação.I
+                  + Álgebra.Vetorial.e.Geometria.Analítica
+                  ,family=binomial, data=down_train)
+```
+
+No proximo modelo utilizei o package ROSE para balancear as classes
+```{r glmrose}
+#ROSE
+set.seed(9560)
+rose_train <- ROSE(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                  + Introdução.à.Computação
+                  + Laboratório.de.Programação.I
+                  + Leitura.e.Produção.de.Textos
+                  + Programação.I
+                  + Álgebra.Vetorial.e.Geometria.Analítica
+                  , data  = train.clean)$data                         
+table(rose_train$EVADIU) 
+
+model.rose <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                  + Introdução.à.Computação
+                  + Laboratório.de.Programação.I
+                  + Leitura.e.Produção.de.Textos
+                  + Programação.I
+                  + Álgebra.Vetorial.e.Geometria.Analítica
+                  ,family=binomial, data=rose_train)
+```
+
+### 4.Treine modelos de árvore de decisão;
+
+```{r decisiontree}
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+
+##modelo sem balanceamento
+##Parametros de prunning default
+fit <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+             + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Leitura.e.Produção.de.Textos
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica,
+             data=train.clean,
+             method="class")
+
+##overfiting
+fancyRpartPlot(fit)
+
+```
+
+
+```{r decisiontreebal}
+
+##modelo com balanceamento - oversampling
+##Parametros de prunning default
+fit.up <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+             + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Leitura.e.Produção.de.Textos
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica,
+             data=up_train,
+             method="class")
+
+fancyRpartPlot(fit.up)
+
+##modelo com balanceamento - undersampling
+##Parametros de prunning default
+fit.down <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+             + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Leitura.e.Produção.de.Textos
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica,
+             data=down_train,
+             method="class")
+
+##overfiting
+fancyRpartPlot(fit.down)
+
+##modelo com balanceamento - ROSE package
+##Parametros de prunning default
+fit.bal <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+             + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Leitura.e.Produção.de.Textos
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica,
+             data=rose_train,
+             method="class")
+
+##overfiting
+fancyRpartPlot(fit.bal)
+
+```
+
+### 5.Treine modelos de árvore de decisão;
+```{r quinto}
+importancia <- varImp(model, scale = FALSE)
+importancia
+
+```{
