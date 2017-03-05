@@ -2,101 +2,160 @@ library(ISLR)
 library(readr)
 library(caret)
 library(dplyr)
-
+library(reshape2)
+library(pROC)
+library(ROSE)
 setwd("~/AD2/Lab3-Parte2")
 treino_classificacao_v2 <- read_csv("treino_classificacao_v2.csv")
 
 
+treino_classificacao_v2 <- treino_classificacao_v2 %>%
+  arrange(MAT_ALU_MATRICULA)
 
-## 1.Separe os dados em treino e teste;
-
-
-
-split <- createDataPartition(y=treino_classificacao_v2$EVADIU, p = 0.9, list = FALSE)
-train <- treino_classificacao_v2[split,]
-test <- treino_classificacao_v2[-split,]
-
-
-
-## 2.Use como atributos as médias das disciplinas mais o atributo que você criou na parte 1 (fique a vontade para criar mais atributos);
-
-
-
-novoatributo <- treino_classificacao_v2 %>%
-  group_by(MAT_ALU_MATRICULA)
-
-novoatributo[novoatributo$MAT_TUR_ANO <= 2011, "ENEM"] <- 0
-novoatributo[novoatributo$MAT_TUR_ANO > 2011, "ENEM"] <- 1
-novoatributo$CREDITOS <- 4
-
-str(novoatributo)
-summary(novoatributo)
-
-
-novoatributo <- novoatributo %>%
-                arrange(MAT_ALU_MATRICULA)
-
-classificacao.clean <- novoatributo %>%
+##reshape table
+classificacao.clean <- treino_classificacao_v2 %>%
   filter(!is.na(MAT_MEDIA_FINAL))
 
-summary(classificacao.clean)
-View(classificacao.clean)
+classificacao.clean$CREDITOS <- 4
 
-##calcular o cra do primeiro periodo
 classificacao.cra <- classificacao.clean %>%
-  group_by(MAT_ALU_MATRICULA) %>%
+  group_by(MAT_ALU_MATRICULA, EVADIU) %>%
   mutate(cra.contrib = MAT_MEDIA_FINAL*CREDITOS) %>%
-  summarise(CRA = sum(cra.contrib)/sum(CREDITOS))
-
-classificacao =merge(novoatributo, classificacao.cra, by="MAT_ALU_MATRICULA")
-
-## treino e teste com novo atributo
-split <- createDataPartition(y=classificacao$EVADIU, p = 0.9, list = FALSE)
-train <- classificacao[split,]
-test <- classificacao[-split,]
+  summarise(cra = sum(cra.contrib)/sum(CREDITOS))
 
 
-##balanceamento
-#install packages
-install.packages("ROSE")
+classificacao.model.input <- classificacao.clean %>%
+  group_by(MAT_ALU_MATRICULA,disciplina)  %>%
+  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
+  ungroup() %>%
+  select(MAT_ALU_MATRICULA,disciplina,MAT_MEDIA_FINAL) %>% 
+  mutate(disciplina = as.factor(gsub(" ",".",disciplina))) %>%
+  dcast(MAT_ALU_MATRICULA ~ disciplina, mean) %>%
+  merge(classificacao.cra)
+
+##Split dos dados
+
+split <- createDataPartition(y=classificacao.model.input$EVADIU, p = 0.75, list = FALSE)
+train <- classificacao.model.input[split,]
+test <- classificacao.model.input[-split,]
+table(train$EVADIU) 
+
+##to factor
+train$EVADIU <- as.factor(train$EVADIU)
+train$MAT_ALU_MATRICULA <- as.factor(train$MAT_ALU_MATRICULA)
+
+is.factor(train$EVADIU)
+is.factor(train$MAT_ALU_MATRICULA)
+
+train.clean <- train %>%
+  filter(!is.na(Álgebra.Vetorial.e.Geometria.Analítica)) %>%
+  filter(!is.na(Cálculo.Diferencial.e.Integral.I)) %>%
+  filter(!is.na(Introdução.à.Computação)) %>%
+  filter(!is.na(Laboratório.de.Programação.I)) %>%
+  filter(!is.na(Programação.I)) %>%
+  filter(!is.na(Leitura.e.Produção.de.Textos)) 
+
+test.clean <- test %>%
+  filter(!is.na(Álgebra.Vetorial.e.Geometria.Analítica)) %>%
+  filter(!is.na(Cálculo.Diferencial.e.Integral.I)) %>%
+  filter(!is.na(Introdução.à.Computação)) %>%
+  filter(!is.na(Laboratório.de.Programação.I)) %>%
+  filter(!is.na(Programação.I)) %>%
+  filter(!is.na(Leitura.e.Produção.de.Textos))
+
+
+
+#oversampling
+set.seed(9560)
+up_train <- upSample(x = train.clean[, -ncol(train.clean)],
+                     y = train.clean$EVADIU)                         
+table(up_train$EVADIU) 
+
+#undersampling
+set.seed(9560)
+down_train <- downSample(x = train.clean[, -ncol(train.clean)],
+                         y = train.clean$EVADIU)  
+table(down_train$Class)   
+
+#ROSE
 library(ROSE)
+set.seed(9560)
+rose_train <- ROSE(EVADIU ~ . , data  = train.clean)$data                         
+table(rose_train$EVADIU) 
 
+##regressao logistica##
+##modelo sem balanceamento
+model <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+             + Introdução.à.Computação
+             + Laboratório.de.Programação.I
+             + Leitura.e.Produção.de.Textos
+             + Programação.I
+             + Álgebra.Vetorial.e.Geometria.Analítica
+             ,family=binomial, data=train.clean)
+summary(model)
 
-prop.table(table(train$EVADIU))
+##modelo com balanceamento
+model.up <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                + Introdução.à.Computação
+                + Laboratório.de.Programação.I
+                + Leitura.e.Produção.de.Textos
+                + Programação.I
+                + Álgebra.Vetorial.e.Geometria.Analítica
+                ,family=binomial, data=up_train)
+summary(model.up)
 
-##modelo com dados nao balanceados
-library(rpart)
-treeimb <- rpart(EVADIU ~ MAT_MEDIA_FINAL, data = train)
-pred.treeimb <- predict(treeimb, newdata = train)
+model.down <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                  + Introdução.à.Computação
+                  + Laboratório.de.Programação.I
+                  + Leitura.e.Produção.de.Textos
+                  + Programação.I
+                  + Álgebra.Vetorial.e.Geometria.Analítica
+                  ,family=binomial, data=down_train)
 
-accuracy.meas(test$EVADIU, pred.treeimb[,2])
+model.rose <- glm(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                  + Introdução.à.Computação
+                  + Laboratório.de.Programação.I
+                  + Leitura.e.Produção.de.Textos
+                  + Programação.I
+                  + Álgebra.Vetorial.e.Geometria.Analítica
+                  ,family=binomial, data=rose_train)
 
-data(hacide)
+# Analysis of deviance
+anova(model,test="Chisq")
 
-pred.treeimb
+fitted.results <- predict(model,newdata=test.clean,type='response')
+fitted.results
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+fitted.results
+misClasificError <- mean(fitted.results != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results)
 
+#AUC oversampling
+fitted.results.up <- predict(model.up,newdata=test.clean,type='response')
+fitted.results.up <- ifelse(fitted.results.up > 0.5,1,0)
+fitted.results.up
+misClasificError <- mean(fitted.results.up != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results.up)
 
+#AUC undersampling
+fitted.results.under <- predict(model.down,newdata=test.clean,type='response')
+fitted.results.under <- ifelse(fitted.results.under > 0.5,1,0)
+fitted.results.under
+misClasificError <- mean(fitted.results.under != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results.under)
 
-##############
+#AUC ROSE
+fitted.results.rose <- predict(model.rose,newdata=test.clean,type='response')
+fitted.results.rose <- ifelse(fitted.results.rose > 0.5,1,0)
+fitted.results.rose
+misClasificError <- mean(fitted.results.rose != test.clean$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+roc.curve(test.clean$EVADIU, fitted.results.rose)
 
-install.packages("ROSE")
-library(ROSE)
-
-data(hacide)
-str(hacide.train)
-
-table(hacide.train$cls)
-prop.table(table(hacide.train$cls))
-
-library(rpart)
-treeimb <- rpart(cls ~ ., data = hacide.train)
-pred.treeimb <- predict(treeimb, newdata = hacide.test)
-
-
-
-
-
-
-
-
-
+auc(test.clean$EVADIU, fitted.results)
+auc(test.clean$EVADIU, fitted.results.up)
+auc(test.clean$EVADIU, fitted.results.under)
+auc(test.clean$EVADIU, fitted.results.rose)
