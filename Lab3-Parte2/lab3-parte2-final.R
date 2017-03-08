@@ -7,6 +7,8 @@ library(pROC)
 library(ROSE)
 library(caret)
 
+#http://stats.stackexchange.com/questions/213571/l2-regularized-mlr-using-caret-and-how-to-make-sure-i-am-using-the-best-tuned-mo
+
 setwd("~/AD2/Lab3-Parte2")
 treino_classificacao_v2 <- read_csv("treino_classificacao_v2.csv")
 
