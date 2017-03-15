@@ -4,7 +4,10 @@ library(ISLR)
 library(caret)
 library(dplyr)
 library(rpart)
-library(randomForest)
+library(ROSE)
+library(pROC)
+
+
 
 setwd("~/Documents/AD2/Lab3-Parte3")
 
@@ -17,151 +20,132 @@ kaggle_teste <- lab3_kaggle_classificacao_teste
 
 kaggle_teste$EVADIU <- 0
 
-# Combine train and test datasets, name all_data 
-all_data <- rbind(kaggle_treino,kaggle_teste)
+#reshape train
+kaggle_treino_unique_line <- kaggle_treino %>%
+  group_by(MAT_ALU_MATRICULA, DISCIPLINA, MAT_TUR_ANO, MAT_TUR_PERIODO)   %>% 
+  unique() 
 
-all_data_cra <- all_data %>%
-  group_by(MAT_ALU_MATRICULA, EVADIU) %>%
-  mutate(cra.contrib = MAT_MEDIA_FINAL*4) %>%
-  summarise(cra = sum(cra.contrib)/24)
-
-
- all_data_reshaped <- all_data %>%
-  group_by(MAT_ALU_MATRICULA,DISCIPLINA)  %>%
-  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
-  ungroup() %>%
+kaggle_treino_reshaped <- kaggle_treino  %>% 
   select(MAT_ALU_MATRICULA,DISCIPLINA,MAT_MEDIA_FINAL) %>% 
   mutate(DISCIPLINA = as.factor(gsub(" ",".",DISCIPLINA))) %>%
-  dcast(MAT_ALU_MATRICULA ~ DISCIPLINA, mean) %>%
-  merge(all_data_cra)
+  dcast(MAT_ALU_MATRICULA ~ DISCIPLINA, value.var = "MAT_MEDIA_FINAL")
 
- summary(all_data_reshaped)
+#reshape test
+kaggle_teste_unique_line <- kaggle_teste  %>%
+  group_by(MAT_ALU_MATRICULA, DISCIPLINA, MAT_TUR_ANO, MAT_TUR_PERIODO)   %>% 
+  unique() 
 
- # Fill missing values in lpt
- predicted_lpt <- rpart( Leitura.e.Produção.de.Textos ~ Álgebra.Vetorial.e.Geometria.Analítica 
-                         + Cálculo.Diferencial.e.Integral.I 
-                         + Introdução.à.Computação 
-                         + Programação.I 
-                         + Laboratório.de.Programação.I, 
-                         data = all_data_reshaped[!is.na(all_data_reshaped$Leitura.e.Produção.de.Textos),], method = "anova")
+kaggle_teste_reshaped <- kaggle_teste  %>% 
+  select(MAT_ALU_MATRICULA,DISCIPLINA,MAT_MEDIA_FINAL) %>% 
+  mutate(DISCIPLINA = as.factor(gsub(" ",".",DISCIPLINA))) %>%
+  dcast(MAT_ALU_MATRICULA ~ DISCIPLINA, value.var = "MAT_MEDIA_FINAL")
+
+
+treino <- merge(kaggle_treino_unique_line, kaggle_treino_reshaped)
+teste <- merge(kaggle_teste_unique_line, kaggle_teste_reshaped)
+#Ta faltando uma disciplina nos testes
+teste$Laboratório.de.Programação.I <- NA
+
+# Combine train and test datasets, name all_data 
+all_data <- rbind(treino,teste)
  
- 
- all_data_reshaped$Leitura.e.Produção.de.Textos[is.na(all_data_reshaped$Leitura.e.Produção.de.Textos)] <- 
-   predict(predicted_lpt, all_data_reshaped[is.na(all_data_reshaped$Leitura.e.Produção.de.Textos),])
- 
-summary(all_data_reshaped)
-
-# Fill missing values in cal1
-predicted_calc1 <- rpart( Cálculo.Diferencial.e.Integral.I ~ Álgebra.Vetorial.e.Geometria.Analítica 
-                        + Leitura.e.Produção.de.Textos
-                        + Introdução.à.Computação 
-                        + Programação.I 
-                        + Laboratório.de.Programação.I, 
-                        data = all_data_reshaped[!is.na(all_data_reshaped$Cálculo.Diferencial.e.Integral.I),], method = "anova")
+all_data$cra <- (all_data$Cálculo.Diferencial.e.Integral.I * 4
+                  + all_data$Leitura.e.Produção.de.Textos * 4
+                  + all_data$Introdução.à.Computação * 4
+                  + all_data$Laboratório.de.Programação.I  * 4
+                  + all_data$Álgebra.Vetorial.e.Geometria.Analítica * 4
+                  + all_data$Programação.I * 4
+ ) / 24
 
 
-all_data_reshaped$Cálculo.Diferencial.e.Integral.I[is.na(all_data_reshaped$Cálculo.Diferencial.e.Integral.I)] <- 
-  predict(predicted_calc1, all_data_reshaped[is.na(all_data_reshaped$Cálculo.Diferencial.e.Integral.I),])
-
-summary(all_data_reshaped)
-
-# Fill missing values in vetorial
-predicted_calc1 <- rpart( Álgebra.Vetorial.e.Geometria.Analítica ~ Cálculo.Diferencial.e.Integral.I
-                          + Leitura.e.Produção.de.Textos
-                          + Introdução.à.Computação 
-                          + Programação.I 
-                          + Laboratório.de.Programação.I, 
-                          data = all_data_reshaped[!is.na(all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica),], 
-                         method = "anova")
 
 
-all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica[is.na(all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica)] <- 
-  predict(predicted_calc1, all_data_reshaped[is.na(all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica),])
+#retira cra's vazios
+all_data[is.na(all_data$cra),]$cra <- 0
 
-summary(all_data_reshaped)
+all_data$missing <- rowSums(is.na(all_data))
 
-# Fill missing values in ic
-predicted_ic <- rpart( Introdução.à.Computação ~ Cálculo.Diferencial.e.Integral.I
-                          + Leitura.e.Produção.de.Textos
-                          +  Laboratório.de.Programação.I
-                          + Programação.I 
-                          + Álgebra.Vetorial.e.Geometria.Analítica, 
-                          data = all_data_reshaped[!is.na(all_data_reshaped$Introdução.à.Computação),], 
-                          method = "anova")
+sete <- all_data[all_data$missing == 7, ]
+
+#input treino
 
 
-all_data_reshaped$Introdução.à.Computação[is.na(all_data_reshaped$Introdução.à.Computação)] <- 
-  predict(predicted_calc1, all_data_reshaped[is.na(all_data_reshaped$Introdução.à.Computação),])
-
-summary(all_data_reshaped)
-
-# Fill missing values in lab1
-predicted_lab1 <- rpart( Laboratório.de.Programação.I ~ Cálculo.Diferencial.e.Integral.I
-                         + Leitura.e.Produção.de.Textos
-                         + Introdução.à.Computação 
-                         + Programação.I 
-                         + Álgebra.Vetorial.e.Geometria.Analítica, 
-                         data = all_data_reshaped[!is.na(all_data_reshaped$Laboratório.de.Programação.I),], 
-                         method = "anova")
 
 
-all_data_reshaped$Laboratório.de.Programação.I[is.na(all_data_reshaped$Laboratório.de.Programação.I)] <- 
-  predict(predicted_calc1, all_data_reshaped[is.na(all_data_reshaped$Laboratório.de.Programação.I),])
-
-summary(all_data_reshaped)
-
-# Fill missing values in p1
-predicted_p1 <- rpart(  Programação.I ~ Cálculo.Diferencial.e.Integral.I
-                         + Leitura.e.Produção.de.Textos
-                         + Introdução.à.Computação 
-                         + Laboratório.de.Programação.I  
-                         + Álgebra.Vetorial.e.Geometria.Analítica, 
-                         data = all_data_reshaped[!is.na(all_data_reshaped$Programação.I),], 
-                         method = "anova")
 
 
-all_data_reshaped$Programação.I[is.na(all_data_reshaped$Programação.I)] <- 
-  predict(predicted_calc1, all_data_reshaped[is.na(all_data_reshaped$Programação.I),])
+#cinco notas NA's, colocar zero nas disciplinas
+all_data_reshaped[all_data_reshaped$missing == 5 & is.na(all_data_reshaped$Cálculo.Diferencial.e.Integral.I), ]$
+  Cálculo.Diferencial.e.Integral.I <- 0
+all_data_reshaped[all_data_reshaped$missing == 5 & is.na(all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica),]$
+  Álgebra.Vetorial.e.Geometria.Analítica <- 0
+all_data_reshaped[all_data_reshaped$missing == 5 & is.na(all_data_reshaped$Introdução.à.Computação), ]$
+  Introdução.à.Computação <- 0
+all_data_reshaped[all_data_reshaped$missing == 5 & is.na(all_data_reshaped$Programação.I), ]$
+  Programação.I <- 0
+all_data_reshaped[all_data_reshaped$missing == 5 & is.na(all_data_reshaped$Laboratório.de.Programação.I), ]$
+  Laboratório.de.Programação.I <- 0
+all_data_reshaped[all_data_reshaped$missing == 5 & is.na(all_data_reshaped$Leitura.e.Produção.de.Textos), ]$
+  Leitura.e.Produção.de.Textos <- 0
+
+
+rwmns = rowMeans(all_data_reshaped[,2:7],na.rm=TRUE)
+all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica[is.na(all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica)] = 
+  rwmns[is.na(all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica)]
+
+all_data_reshaped$Cálculo.Diferencial.e.Integral.I[is.na(all_data_reshaped$Cálculo.Diferencial.e.Integral.I)] = 
+  rwmns[is.na(all_data_reshaped$Cálculo.Diferencial.e.Integral.I)]
+
+all_data_reshaped$Introdução.à.Computação[is.na(all_data_reshaped$Introdução.à.Computação)] = 
+  rwmns[is.na(all_data_reshaped$Introdução.à.Computação)]
+
+all_data_reshaped$Programação.I[is.na(all_data_reshaped$Programação.I)] = 
+  rwmns[is.na(all_data_reshaped$Programação.I)]
+
+all_data_reshaped$Laboratório.de.Programação.I[is.na(all_data_reshaped$Laboratório.de.Programação.I)] = 
+  rwmns[is.na(all_data_reshaped$Laboratório.de.Programação.I)]
+
+all_data_reshaped$Leitura.e.Produção.de.Textos[is.na(all_data_reshaped$Leitura.e.Produção.de.Textos)] = 
+  rwmns[is.na(all_data_reshaped$Leitura.e.Produção.de.Textos)]
 
 summary(all_data_reshaped)
 
 
-# Fill missing values in cra
-all_data_reshaped$cra <- (all_data_reshaped$Cálculo.Diferencial.e.Integral.I * 4
-                         + all_data_reshaped$Leitura.e.Produção.de.Textos * 4
-                         + all_data_reshaped$Introdução.à.Computação * 4
-                         + all_data_reshaped$Laboratório.de.Programação.I  * 4
-                         + all_data_reshaped$Álgebra.Vetorial.e.Geometria.Analítica * 4
-                         + all_data_reshaped$Programação.I * 4
-                         ) / 24
-
-
-# Split the data back into train and test
-split <- createDataPartition(y=all_data_reshaped$EVADIU, p = 0.90, list = FALSE)
-train <- all_data_reshaped[split,]
-test <- all_data_reshaped[-split,]
+train <- all_data_reshaped[1:1302,]
+test <- all_data_reshaped[1303:1370,]
 
 # set seed for reproducibility
 set.seed(111)
+table(train$EVADIU) 
+
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+
+#ROSE
+set.seed(111)
+fit.down <- rpart(EVADIU ~ Cálculo.Diferencial.e.Integral.I
+                  + Introdução.à.Computação
+                  + Laboratório.de.Programação.I
+                  + Leitura.e.Produção.de.Textos
+                  + Programação.I
+                  + Álgebra.Vetorial.e.Geometria.Analítica
+                  + missing,
+                  data=train,
+                  method="class")
+
+fancyRpartPlot(fit.down)
+
+fitted.results.rose <- predict(model.rose,newdata=all_data_reshaped,type='response')
+fitted.results.rose <- ifelse(fitted.results.rose > 0.5,1,0)
+all_data_reshaped$EVADIU <- fitted.results.rose
+misClasificError <- mean(fitted.results.rose != test$EVADIU)
+print(paste('Accuracy',1-misClasificError))
+accuracy.meas(all_data_reshaped$EVADIU, fitted.results.rose)
 
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
+
  
  
  

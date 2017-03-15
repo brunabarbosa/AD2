@@ -1,3 +1,5 @@
+install.packages("readr")
+
 library(ISLR)
 library(readr)
 library(caret)
