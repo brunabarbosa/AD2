@@ -110,4 +110,14 @@ recom.test
 View(as(recom.test, "matrix"))
 
 predictedValues <- as(recom.test, "matrix")
+pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
+
+pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
+  mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA))
+
+test.4.periodo <- test %>% filter(periodo_relativo == 4)
+
+result.4.periodo <- inner_join(pred.values.df.melt,test)
+
 
