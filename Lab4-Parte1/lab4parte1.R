@@ -3,8 +3,8 @@ setwd("~/Documents/AD2/Lab4-Parte1")
 library(readr)
 library(dplyr)
 
-lab4_part1_train_data <- read_csv("~/Documents/AD2/Lab4-Parte1/lab4_part1_train_data.csv")
-lab4_part1_test_data <- read_csv("~/Documents/AD2/Lab4-Parte1/lab4_part1_test_data.csv")
+lab4_part1_train_data <- read_csv("lab4_part1_train_data.csv")
+lab4_part1_test_data <- read_csv("lab4_part1_test_data.csv")
 
 #lab4_part1_data <- read_csv("~/Documents/AD2/Lab4-Parte1/lab4_part1_data.csv")
 #lab4_part1_data_v2 <- read_csv("~/Documents/AD2/Lab4-Parte1/lab4_part1_data_v2.csv")
@@ -101,9 +101,13 @@ recom <- predict(rec, r[1:nrow(r)], type="ratings")
 recom
 View(as(recom, "matrix"))
 
-## predict ratings for new users
-pre <- predict(rec, r[101:102], type="ratings")
-pre
-as(pre, "matrix")[,1:10]
 
+R<-as.matrix(test.dcast[,-c(1)])
+r <- as(R[,-c(1)], "realRatingMatrix")
+
+recom.test <- predict(rec, r[1:nrow(r)], type="ratings")
+recom.test
+View(as(recom.test, "matrix"))
+
+predictedValues <- as(recom.test, "matrix")
 
