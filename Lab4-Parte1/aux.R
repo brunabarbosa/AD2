@@ -54,6 +54,9 @@ test.4.periodo <- lab4_part1_data_v2 %>% filter(periodo_relativo == 4)
 
 result.4.periodo <- inner_join(pred.values.df.melt,lab4_part1_data_v2)
 
+RMSE(true, predicted)
+
+
 
 
 
