@@ -60,4 +60,6 @@ result.4.periodo <- inner_join(pred.values.df.melt,test.4.periodo)
 
 RMSE(result.4.periodo$value,result.4.periodo$MAT_MEDIA_FINAL) 
 
+#Alterar os metodos de predição
+
 
