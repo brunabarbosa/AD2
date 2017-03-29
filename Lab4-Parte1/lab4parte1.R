@@ -16,21 +16,17 @@ library(ggplot2)
 
 test.sem.4.P <- test %>% mutate(MAT_MEDIA_FINAL = ifelse(periodo_relativo == 4, NA, MAT_MEDIA_FINAL)) 
 
+remove.inf <- function(x) ifelse(x==-Inf,NA,x)
+
 train.dcast <- train %>%
-  group_by(MAT_NOVA_MATRICULA,NOME_DISCIPLINA)  %>%
-  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
-  ungroup() %>%
-  select(MAT_NOVA_MATRICULA,NOME_DISCIPLINA,MAT_MEDIA_FINAL) %>% 
-  mutate(NOME_DISCIPLINA = as.factor(gsub(" ",".",NOME_DISCIPLINA))) %>%
-  dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, mean)
+  dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, fun.aggregate = max, value.var = "MAT_MEDIA_FINAL") %>%
+  mutate_each(funs(remove.inf),-MAT_NOVA_MATRICULA) %>%
+  select(-starts_with('NA'))
 
 test.sem.4.p.dcast <- test.sem.4.P %>%
-  group_by(MAT_NOVA_MATRICULA,NOME_DISCIPLINA)  %>%
-  filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
-  ungroup() %>%
-  select(MAT_NOVA_MATRICULA,NOME_DISCIPLINA,MAT_MEDIA_FINAL) %>% 
-  mutate(NOME_DISCIPLINA = as.factor(gsub(" ",".",NOME_DISCIPLINA))) %>%
-  dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, mean)
+  dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, fun.aggregate = max, value.var = "MAT_MEDIA_FINAL") %>%
+  mutate_each(funs(remove.inf),-MAT_NOVA_MATRICULA) %>%
+  select(-starts_with('NA'))
 
 str(train.dcast)
 str(test.sem.4.p.dcast)
@@ -42,7 +38,7 @@ r <- as(R, "realRatingMatrix")
 rec=Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=5))
 
 #predict
-R.test <-as.matrix(select(test.sem.4.p.dcast, -starts_with('NA'), -MAT_NOVA_MATRICULA))
+R.test <-as.matrix(test.sem.4.p.dcast[,-c(1)])
 r.test <- as(R.test,"realRatingMatrix")
 
 recom.test <- predict(rec, r.test, type="ratings")
@@ -50,20 +46,18 @@ recom.test
 
 
 predictedValues <- as(recom.test, "matrix")
-
-pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
+pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.sem.4.p.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
 
 pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
   mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
-         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA))
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaPred = value)
 
 test.4.periodo <- test %>% filter(periodo_relativo == 4)
 
+result.4.periodo <- inner_join(pred.values.df.melt,test.4.periodo)
 
-result.4.periodo <- inner_join(pred.values.df.melt,test)
 
-
-result.4.periodo.merge <- merge(pred.values.df.melt, test)
- 
+RMSE(result.4.periodo$value,result.4.periodo$MAT_MEDIA_FINAL) 
 
 
