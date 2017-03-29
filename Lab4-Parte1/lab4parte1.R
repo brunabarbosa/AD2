@@ -1,4 +1,4 @@
-setwd("~/Documents/AD2/Lab4-Parte1")
+setwd("~/Documentos/AD2/Lab4-Parte1")
 
 library(readr)
 library(dplyr)
@@ -13,11 +13,9 @@ library(recommenderlab)
 library(reshape2)
 library(ggplot2)
 
-# Using acast to convert above data as follows:
-#       d1  d2   d3   d4
-# a1    3   4    2    5
-# a2    1   6    5
-# a3    4   4    2    5
+
+test.sem.4.P <- test %>% mutate(MAT_MEDIA_FINAL = ifelse(periodo_relativo == 4, NA, MAT_MEDIA_FINAL)) 
+
 train.dcast <- train %>%
   group_by(MAT_NOVA_MATRICULA,NOME_DISCIPLINA)  %>%
   filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
@@ -26,7 +24,7 @@ train.dcast <- train %>%
   mutate(NOME_DISCIPLINA = as.factor(gsub(" ",".",NOME_DISCIPLINA))) %>%
   dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, mean)
 
-test.dcast <- test %>%
+test.sem.4.p.dcast <- test.sem.4.P %>%
   group_by(MAT_NOVA_MATRICULA,NOME_DISCIPLINA)  %>%
   filter(MAT_MEDIA_FINAL == max(MAT_MEDIA_FINAL)) %>%
   ungroup() %>%
@@ -34,43 +32,25 @@ test.dcast <- test %>%
   mutate(NOME_DISCIPLINA = as.factor(gsub(" ",".",NOME_DISCIPLINA))) %>%
   dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, mean)
 
-# Convert it as a matrix
+str(train.dcast)
+str(test.sem.4.p.dcast)
+
+##create model
 R<-as.matrix(train.dcast[,-c(1)])
+r <- as(R, "realRatingMatrix")
 
-# Convert R into realRatingMatrix data structure
-#   realRatingMatrix is a recommenderlab sparse-matrix like data-structure
-r <- as(R[,-c(1)], "realRatingMatrix")
-r
-
-
-# Create a recommender object (model)
-#   Run anyone of the following four code lines.
-#     Do not run all four
-#       They pertain to four different algorithms.
-#        UBCF: User-based collaborative filtering
-#        IBCF: Item-based collaborative filtering
-#      Parameter 'method' decides similarity measure
-#        Cosine or Jaccard
 rec=Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=5))
 
-# Depending upon your selection, examine what you got
-print(rec)
-names(getModel(rec))
-getModel(rec)$nn
+#predict
+R.test <-as.matrix(select(test.sem.4.p.dcast, -starts_with('NA'), -MAT_NOVA_MATRICULA))
+r.test <- as(R.test,"realRatingMatrix")
 
-#recom <- predict(rec, r[1:nrow(r)], type="ratings")
-#recom
-#View(as(recom, "matrix"))
-
-
-R <-as.matrix(test.dcast[,-c(1)])
-r <- as(R[,-c(1)], "realRatingMatrix")
-
-recom.test <- predict(rec, r[1:nrow(r)], type="ratings")
+recom.test <- predict(rec, r.test, type="ratings")
 recom.test
-View(as(recom.test, "matrix"))
+
 
 predictedValues <- as(recom.test, "matrix")
+
 pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
 
 pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%

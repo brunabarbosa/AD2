@@ -1,4 +1,4 @@
-setwd("~/Documents/AD2/Lab4-Parte1")
+setwd("~/Documentos/AD2/Lab4-Parte1")
 
 library(readr)
 library(dplyr)
@@ -9,8 +9,8 @@ library(caret)
 
 set.seed(107)
 
-lab4_part1_data <- read_csv("~/Documents/AD2/Lab4-Parte1/lab4_part1_data.csv")
-lab4_part1_data_v2 <- read_csv("~/Documents/AD2/Lab4-Parte1/lab4_part1_data_v2.csv")
+lab4_part1_data <- read_csv("lab4_part1_data.csv")
+lab4_part1_data_v2 <- read_csv("lab4_part1_data_v2.csv")
 
 dt = sort(sample(nrow(lab4_part1_data), nrow(lab4_part1_data)*.7))
 train<-lab4_part1_data[dt,]
@@ -47,15 +47,24 @@ pred.values.df <- cbind(MAT_NOVA_MATRICULA=test$MAT_NOVA_MATRICULA,as.data.frame
 
 pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
   mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
-         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA))
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaPred = value)
 
 test.4.periodo <- lab4_part1_data_v2 %>% filter(periodo_relativo == 4)
 
-
+##result para merge entre os valores da predicao e o test
 result.4.periodo <- inner_join(pred.values.df.melt,lab4_part1_data_v2)
+
 
 RMSE(true, predicted)
 
+
+test.melt <- melt(test,id.vars = c("MAT_NOVA_MATRICULA","ALU_ANO_INGRESSO", "ALU_PERIODO_INGRESSO") , variable.name = "NOME_DISCIPLINA") %>%
+  mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaReal = value)
+
+result <- inner_join(pred.values.df.melt, test.melt)
 
 
 
