@@ -1,0 +1,16 @@
+base
+methods
+datasets
+utils
+grDevices
+graphics
+stats
+readr
+dplyr
+Matrix
+arules
+proxy
+registry
+recommenderlab
+reshape2
+ggplot2

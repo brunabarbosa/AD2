@@ -1,0 +1,252 @@
+---
+title: "lab4parte1"
+author: "Bruna Barbosa"
+date: "March 29, 2017"
+output: html_document
+---
+
+## 1. Importando os dados
+
+Os dados foram particionados em treino e teste da seguinte forma: Para o treino, selecionamos os alunos que cursaram o quarto período até 2015.2, e para o teste, os alunos que cursaram o quarto período em 2016.1. 
+
+```{r setup, cache=TRUE, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(recommenderlab)
+library(reshape2)
+library(ggplot2)
+
+
+train <- read_csv("/home/bruna/Documents/AD2/Lab4-Parte1/lab4_part1_train_data.csv")
+test <- read_csv("/home/bruna/Documents/AD2/Lab4-Parte1/lab4_part1_test_data.csv")
+
+#Dataframe sem as notas das displinas que os alunos cursaram no quarto periodo
+test.sem.4.P <- test %>% mutate(MAT_MEDIA_FINAL = ifelse(periodo_relativo == 4, NA, MAT_MEDIA_FINAL)) 
+
+
+remove.inf <- function(x) ifelse(x==-Inf,NA,x)
+
+#Transformar o formato do treino 
+train.dcast <- train %>%
+  dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, fun.aggregate = max, value.var = "MAT_MEDIA_FINAL") %>%
+  mutate_each(funs(remove.inf),-MAT_NOVA_MATRICULA) %>%
+  select(-starts_with('NA'))
+
+#Transformar o formato do treino 
+test.sem.4.p.dcast <- test.sem.4.P %>%
+  dcast(MAT_NOVA_MATRICULA ~ NOME_DISCIPLINA, fun.aggregate = max, value.var = "MAT_MEDIA_FINAL") %>%
+  mutate_each(funs(remove.inf),-MAT_NOVA_MATRICULA) %>%
+  select(-starts_with('NA'))
+```
+
+## 2. Criação do modelo 
+
+O pacote RecommenderLab foi utilizado para criar o modelo do sistema de recomendação com filtragem colaborativa.
+
+```{r createModel}
+R<-as.matrix(train.dcast[,-c(1)])
+r <- as(R, "realRatingMatrix")
+
+rec=Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=5))
+
+##nn = 5
+##Considera os 5 vizinhos mais similares ao aluno que desejamos prever as notas do quarto periodo
+```
+
+## 3.Predição das notas 
+
+Realiza a predição das notas das disciplinas que os alunos cursaram no quarto periodo(periodo_relativo).
+
+```{r predict}
+
+R.test <-as.matrix(test.sem.4.p.dcast[,-c(1)])
+r.test <- as(R.test,"realRatingMatrix")
+
+recom.test <- predict(rec, r.test, type="ratings")
+recom.test
+
+```
+
+## 4. Filtragem das notas dos alunos
+
+```{r filter}
+
+##Predicao das notas dos alunos no quarto periodo
+predictedValues <- as(recom.test, "matrix")
+
+##Concatena as predições com a matricula
+pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.sem.4.p.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
+
+##Transforma o formato do dataframe que contem as predições
+##De wide para long
+pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
+  mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaPred = value)
+
+##Data frame que contem as notas reais dos alunos no quarto periodo
+test.4.periodo <- test %>% filter(periodo_relativo == 4)
+
+##Join entre as predições das notas e as notas reais 
+result.4.periodo <- inner_join(pred.values.df.melt,test.4.periodo)
+
+```
+
+
+## 5. Calculo do erro
+
+Erro entre as predições e as notas reais dos alunos
+
+```{r erro}
+
+##Erro para o modelo considerando os 5 vizinhos mais proximos
+RMSE(result.4.periodo$mediaPred,result.4.periodo$MAT_MEDIA_FINAL) 
+
+##RMSE
+##[1] 2.374707
+
+
+```
+
+## 6. Variações no modelo
+
+Considerando 20 vizinhos mais proximos
+
+```{r vinte, message=FALSE}
+
+rec20 = Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=20))
+recom.test.20 <- predict(rec20, r.test, type="ratings")
+
+
+predictedValues <- as(recom.test.20, "matrix")
+
+
+pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.sem.4.p.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
+pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
+  mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaPred = value)
+test.4.periodo <- test %>% filter(periodo_relativo == 4)
+
+result.4.periodo <- inner_join(pred.values.df.melt,test.4.periodo)
+```
+ 
+RMSE considerando os 20 vizinhos mais proximos
+```{r vinteProx}
+##Erro para o modelo considerando os 20 vizinhos mais proximos
+RMSE(result.4.periodo$mediaPred,result.4.periodo$MAT_MEDIA_FINAL) 
+
+##RMSE
+##[1] 2.365528
+
+```
+
+Considerando 100 vizinhos mais proximos
+
+```{r cem, message=FALSE}
+
+rec100 = Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=100))
+recom.test.100 <- predict(rec100, r.test, type="ratings")
+
+
+predictedValues <- as(recom.test.100, "matrix")
+
+
+pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.sem.4.p.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
+pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
+  mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaPred = value)
+test.4.periodo <- test %>% filter(periodo_relativo == 4)
+
+result.4.periodo <- inner_join(pred.values.df.melt,test.4.periodo)
+```
+ 
+RMSE considerando os 100 vizinhos mais proximos
+```{r cemProx}
+##Erro para o modelo considerando os 100 vizinhos mais proximos
+RMSE(result.4.periodo$mediaPred,result.4.periodo$MAT_MEDIA_FINAL) 
+
+##RMSE
+##[1] 2.333558
+
+```
+
+Considerando 500 vizinhos mais proximos
+
+```{r quinhentos, message=FALSE}
+
+rec500 = Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=500))
+recom.test.500 <- predict(rec500, r.test, type="ratings")
+
+
+predictedValues <- as(recom.test.500, "matrix")
+
+
+pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.sem.4.p.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
+pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
+  mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaPred = value)
+test.4.periodo <- test %>% filter(periodo_relativo == 4)
+
+result.4.periodo <- inner_join(pred.values.df.melt,test.4.periodo)
+```
+ 
+RMSE considerando os 500 vizinhos mais proximos
+```{r quinhentosProx}
+##Erro para o modelo considerando os 500 vizinhos mais proximos
+RMSE(result.4.periodo$mediaPred,result.4.periodo$MAT_MEDIA_FINAL) 
+
+##RMSE
+##[1] 2.295927
+
+```
+
+Considerando 1000 vizinhos mais proximos
+
+```{r mil, message=FALSE}
+
+rec1000 = Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=500))
+recom.test.1000 <- predict(rec1000, r.test, type="ratings")
+
+
+predictedValues <- as(recom.test.1000, "matrix")
+
+
+pred.values.df <- cbind(MAT_NOVA_MATRICULA=test.sem.4.p.dcast$MAT_NOVA_MATRICULA,as.data.frame(predictedValues))
+pred.values.df.melt <- melt(pred.values.df,id.vars = "MAT_NOVA_MATRICULA", variable.name = "NOME_DISCIPLINA") %>%
+  mutate(MAT_NOVA_MATRICULA = as.character(MAT_NOVA_MATRICULA),
+         NOME_DISCIPLINA = as.character(NOME_DISCIPLINA)) %>%
+  rename(mediaPred = value)
+test.4.periodo <- test %>% filter(periodo_relativo == 4)
+
+result.4.periodo <- inner_join(pred.values.df.melt,test.4.periodo)
+```
+ 
+RMSE considerando os 1000 vizinhos mais proximos
+```{r milProx}
+##Erro para o modelo considerando os 1000 vizinhos mais proximos
+RMSE(result.4.periodo$mediaPred,result.4.periodo$MAT_MEDIA_FINAL) 
+
+##RMSE
+##[1] 2.295927
+
+```
+
+## Conclusão
+
+O modelo consegue prever notas para todas disciplinas que os alunos cursaram no quarto periodo. Não houve 
+exemplos onde o modelo não teve predição.
+
+```{r faltando}
+##Coluna contendo predicoes
+summary(result.4.periodo$mediaPred)
+```
+
+Aumentando o numero de vizinhos mais proximos considerados no modelo diminui o erro, porem aumentando demais o numero de vizinhos não faz diferente no RMSE obtido e torna o algoritmo mais lento.
+
+Todos os RMSE's foram calculados com os dados teste.
+
+
+

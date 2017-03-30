@@ -1,0 +1,112 @@
+TechHacks Talk - Dec. 6, 2013 - Recommender System
+========================================================
+rec-sys : : [HTML](http://www.cs.mtu.edu/~lebrown/TechHacks-f13/rec-sys/rec-sys.html)  | [Rmd - R Markdown](http://www.cs.mtu.edu/~lebrown/TechHacks-f13/rec-sys/rec-sys.Rmd) | [md - Markdown](http://www.cs.mtu.edu/~lebrown/TechHacks-f13/rec-sys/rec-sys.md)
+
+
+## Data Mining Example - Recommender Systems
+
+
+We will explore building a recommender system.  
+
+### Load data
+
+First step is to load in some sample data.  The data was collected by survey from cs1000 students in Fall 2013 and is available [here](http://www.cs.mtu.edu/~lebrown/TechHacks-12-6-13/rec-sys/data/cs1000_f13_data.csv)  
+
+```{r}
+dat1 <- read.csv("~/Desktop/TechHacks-12-6-13/data/cs1000_f13_data.csv")
+```
+Note, you will need to set the data to load from your working directory or where it is located on your computer. 
+
+
+### Install and Load RecommenderLab R package
+
+We will make use of some available R functions.
+
+If you haven't already installed the Recommender Lab package, do so:
+```{r, eval=FALSE}
+install.packages('recommenderlab', dependencies=TRUE)
+```
+
+Then load the package:
+```{r, include=FALSE}
+library(recommenderlab)
+```
+
+### Work with Data
+
+First, set up the data in the needed format for the recommender library functions. 
+
+```{r}
+m1 <- as.matrix(dat1)
+r1 <- as(m1, "realRatingMatrix")
+```
+
+In order, to get a view on the distribution of ratings we can plot the ratings as heat maps.
+
+```{r ratingPlot, fig.width=6}
+rn1 <- normalize(r1)
+image(r1, main="Ratings");
+image(rn1, main="Normalized Ratings");
+```
+
+Next, we can look at the mean rating for each student and plot this as a histogram.
+
+```{r}
+rmn <- rowMeans(r1)
+rmn
+hist(rmn, breaks=10, main="Histogram of Mean User Ratings", xlab="Ratings")
+```
+
+We can also look at the mean rating for each show.
+```{r}
+cmn <- colMeans(r1)
+cmn
+hist(cmn, breaks=10, main="Histogram of Mean TV Rating", xlab="Ratings")
+```
+
+In fact, we can see by sorting via the mean TV rating, that the highest rated shows are: 
+
+* Breaking Bad
+* The Walking Dead
+* Game of Thrones
+
+```{r}
+nd <- order(cmn)
+colnames(dat1)[nd]
+```
+
+----
+Following examples of recommenderlab documentation.
+### Recommendation System
+
+```{r}
+ubr <- Recommender(r1, method="UBCF")
+pred <- predict(ubr, r1, type="ratings")
+#as(pred, "matrix")
+```
+
+The supplied ratings for User 3 are:
+```{r}
+dat1[3,]
+```
+
+The predicted ratings for the missing shows are:
+```{r}
+colnames(dat1)[is.na(dat1[3,])]
+getRatings(pred[3,])
+```
+
+
+Present the top 2 predicted ratings for each user (output surpressed for space)
+```{r, eval=FALSE}
+pred <- predict(ubr, r1, n=2)
+
+recs <- bestN(pred, n=2)
+as(recs, "list")
+```
+
+Present the top 3 predicted ratins for user 3
+```{r}
+pred <- predict(ubr, r1[3], n=3)
+as(pred, "list")
+```
